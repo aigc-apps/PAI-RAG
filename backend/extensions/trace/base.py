@@ -34,12 +34,18 @@ def use_current_span(span):
 
         @wraps(fn)
         async def wrapper(*args, **kwargs):
-            token = otel_context.attach(trace.set_span_in_context(span))
-            try:
-                async for item in fn(*args, **kwargs):
-                    yield item
-            finally:
-                otel_context.detach(token)
+            iterator = fn(*args, **kwargs).__aiter__()
+            while True:
+                token = otel_context.attach(trace.set_span_in_context(span))
+                try:
+                    item = await iterator.__anext__()
+                except StopAsyncIteration:
+                    return
+                finally:
+                    # Never retain a ContextVar token across ``yield``: the next
+                    # __anext__ may be driven by a different asyncio Context.
+                    otel_context.detach(token)
+                yield item
 
         return wrapper
 

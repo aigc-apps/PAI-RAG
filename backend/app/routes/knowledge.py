@@ -587,7 +587,7 @@ async def list_data_sources(
         rows = await svc.list_data_sources(kb_id, user=user)
     except PermissionError as exc:
         raise _not_found(exc) from exc
-    return {"data": [_dump(r) for r in rows]}
+    return {"data": [await svc.data_source_payload(r) for r in rows]}
 
 
 @router.post("/v1/knowledge-bases/{kb_id}/datasources")
@@ -617,7 +617,7 @@ async def get_data_source(
         row = await svc.get_data_source(kb_id, ds_id, user=user)
     except PermissionError as exc:
         raise _not_found(exc) from exc
-    return _dump(row)
+    return await svc.data_source_payload(row)
 
 
 @router.patch("/v1/knowledge-bases/{kb_id}/datasources/{ds_id}")
@@ -661,21 +661,33 @@ async def sync_data_source(
     svc: KnowledgeService = Depends(get_knowledge_service),
     queue=Depends(get_job_queue),
 ):
-    # Pre-flight synchronously so permission / not-found / disabled errors reach
-    # the caller; the sync itself runs as a durable queued job (survives restart,
-    # retried on failure) and is polled via GET.
     try:
-        await svc.get_kb(kb_id, user=user, require_manage=True)
-        row = await svc.get_data_source(kb_id, ds_id, user=user)
+        job_id, row = await svc.enqueue_data_source_sync(
+            queue, kb_id, ds_id, user=user
+        )
     except PermissionError as exc:
         raise _not_found(exc) from exc
-    if not row.enabled:
-        raise HTTPException(status_code=400, detail="data source is disabled")
-    if row.status == "syncing":
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError:
         raise HTTPException(status_code=409, detail="a sync is already in progress")
-
-    job_id = await queue.enqueue(
-        kind="kb_sync", kb_id=kb_id, created_by=user.id,
-        payload={"kb_id": kb_id, "ds_id": ds_id, **_user_payload(user)},
-    )
     return {"ok": True, "status": "syncing", "data_source": _dump(row), "job_id": job_id}
+
+
+@router.post("/v1/knowledge-bases/{kb_id}/datasources/{ds_id}/sync/cancel", status_code=202)
+async def cancel_data_source_sync(
+    kb_id: str,
+    ds_id: str,
+    user: User = Depends(require_user),
+    svc: KnowledgeService = Depends(get_knowledge_service),
+    queue=Depends(get_job_queue),
+):
+    try:
+        job_id = await svc.cancel_data_source_sync(
+            queue, kb_id, ds_id, user=user
+        )
+    except PermissionError as exc:
+        raise _not_found(exc) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {"ok": True, "status": "cancelling", "job_id": job_id}

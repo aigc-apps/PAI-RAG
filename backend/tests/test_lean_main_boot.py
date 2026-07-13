@@ -1,8 +1,107 @@
+# ruff: noqa: E402
 # tests/app/test_lean_main_boot.py
-import sys, os
+import builtins
+import os
+import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from fastapi.testclient import TestClient
+from fastapi import FastAPI
+from loguru import logger
+
+
+def test_new_database_uses_clean_builtin_config_instead_of_local_yaml(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "knowledgebase:\n"
+        "  vectordb:\n"
+        "    engine: elasticsearch\n"
+        "    url: http://old-es.example.test:9200\n"
+        "providers:\n"
+        "  - id: sandbox.default\n"
+        "    type: sandbox\n"
+        "    settings:\n"
+        "      endpoint: http://old-sandbox.example.test\n"
+        "      template_name: old-template\n"
+    )
+
+    import app.lean_main as m
+
+    seed = m._new_database_config_seed(
+        SimpleNamespace(config_path=str(config_path))
+    )
+
+    assert seed.knowledgebase.vectordb.engine == "local"
+    sandbox = next(provider for provider in seed.providers if provider.id == "sandbox.default")
+    assert sandbox.settings["endpoint"] == ""
+    assert sandbox.settings["template_name"] == ""
+
+
+def _capture_database_log(settings) -> str:
+    import app.lean_main as m
+
+    messages: list[str] = []
+    sink_id = logger.add(lambda message: messages.append(str(message)), format="{message}")
+    try:
+        m._log_database_backend(settings)
+    finally:
+        logger.remove(sink_id)
+    return "".join(messages)
+
+
+def test_logs_postgresql_backend_without_connection_details():
+    settings = SimpleNamespace(
+        store_backend="sql",
+        db_url="postgresql+asyncpg://secret-user:secret-pass@db.internal:5432/pairag",
+    )
+
+    message = _capture_database_log(settings)
+
+    assert "[db] database backend = postgresql" in message
+    assert "secret-user" not in message
+    assert "secret-pass" not in message
+    assert "db.internal" not in message
+
+
+def test_logs_memory_database_as_in_memory_sqlite():
+    settings = SimpleNamespace(store_backend="memory", db_url="ignored://secret")
+
+    message = _capture_database_log(settings)
+
+    assert "[db] database backend = sqlite (memory)" in message
+    assert "secret" not in message
+
+
+def test_tracing_without_configuration_does_not_require_opentelemetry(monkeypatch):
+    for key in (
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "LANGFUSE_PUBLIC_KEY",
+        "LANGFUSE_SECRET_KEY",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+    import app.lean_main as m
+
+    real_import = builtins.__import__
+
+    def block_otel(name, *args, **kwargs):
+        if name == "opentelemetry" or name.startswith("opentelemetry."):
+            raise AssertionError("disabled tracing must not import opentelemetry")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", block_otel)
+
+    messages: list[str] = []
+    sink_id = logger.add(lambda message: messages.append(str(message)), format="{message}")
+    try:
+        m._init_tracing(FastAPI(), SimpleNamespace())
+    finally:
+        logger.remove(sink_id)
+
+    output = "".join(messages)
+    assert "[trace] tracing disabled" in output
+    assert "tracing extension unavailable" not in output
 
 
 def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
@@ -30,6 +129,8 @@ def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setenv("DEFAULT_MODEL", "test/echo")
     monkeypatch.setenv("JWT_SECRET", "boot-test-secret")
+    monkeypatch.setenv("JOB_HEARTBEAT_SECONDS", "2")
+    monkeypatch.setenv("JOB_LEASE_SECONDS", "9")
     import importlib
 
     # The legacy heavy app is `app.main`; the lean service is `app.lean_main`.
@@ -61,6 +162,8 @@ def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
             return gen()
 
     with TestClient(m.app) as c:
+        assert c.app.state.app_state.jobs._heartbeat_seconds == 2
+        assert c.app.state.app_state.jobs._lease_seconds == 9
         echo = _EchoLLM()
         c.app.state.app_state.llm = echo
         # When a ProviderRouter is wired, the responses route uses router.get_llm()

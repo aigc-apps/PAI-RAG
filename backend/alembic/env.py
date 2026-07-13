@@ -22,12 +22,12 @@ target_metadata = SQLModel.metadata
 
 def _db_url() -> str:
     # Priority: `-x db_url=...` (one-off CLI targets) > a URL injected on the
-    # Config by the app's boot-time migrate() (sqlalchemy.url main option) >
-    # the app settings, so the CLI and the app stay in lockstep by default.
+    # Config by the app's boot-time migrate() > the app settings, so the CLI
+    # and the app stay in lockstep by default.
     x_args = context.get_x_argument(as_dictionary=True)
     if x_args.get("db_url"):
         return x_args["db_url"]
-    injected = config.get_main_option("sqlalchemy.url")
+    injected = config.attributes.get("db_url")
     if injected:
         return injected
     return get_settings().db_url

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 import os
 from typing import List, Literal, Optional
 import yaml
@@ -172,8 +173,16 @@ class ProviderRouter:
     GitOps/eventually consistent across instances; runtime-state sync is a
     separate concern)."""
 
-    def __init__(self, catalog: ModelCatalog, path: Optional[str] = None):
+    def __init__(
+        self,
+        catalog: ModelCatalog,
+        path: Optional[str] = None,
+        embedding_concurrency: int = 6,
+    ):
         self._path = path
+        self._embedding_gate = asyncio.Semaphore(
+            min(16, max(1, embedding_concurrency))
+        )
         self._configs: dict = {}
         self._clients: dict = {}
         self._default = ""
@@ -255,6 +264,17 @@ class ProviderRouter:
             raise KeyError(model_id)
         return cfg
 
+    async def aclose(self) -> None:
+        """Close cached retrieval clients owned by this router on app shutdown."""
+        seen: set[int] = set()
+        for client in self._clients.values():
+            if id(client) in seen:
+                continue
+            seen.add(id(client))
+            close = getattr(client, "aclose", None)
+            if close is not None:
+                await close()
+
     def _resolve_key(self, cfg: ModelConfig) -> str:
         """Resolve the API key for a model, or raise the same actionable error
         get_llm has always raised when a required env var is unset. Keyless
@@ -307,6 +327,7 @@ class ProviderRouter:
             emb = DashScopeEmbedder(
                 base_url=cfg.base_url, api_key=key, model=cfg.id,
                 dimension=cfg.dimension or 1024,
+                concurrency_gate=self._embedding_gate,
             )
         else:
             emb = OpenAICompatibleEmbedder(

@@ -20,7 +20,7 @@ vi.mock("../../api/models", () => ({
   modelsByType: vi.fn().mockReturnValue([]),
 }));
 
-import { KnowledgeView } from "../KnowledgeView";
+import { KnowledgeView, SyncProgressView } from "../KnowledgeView";
 
 const kb: KnowledgeBase = {
   id: "kb_1",
@@ -116,5 +116,44 @@ describe("KnowledgeView routes", () => {
 
     rerender(<KnowledgeView {...props} tab="config" />);
     await waitFor(() => expect(screen.queryByText("Reranker")).not.toBeInTheDocument());
+  });
+});
+
+describe("SyncProgressView", () => {
+  it("renders accessible progress, rate, ETA, failures, and cancellation", async () => {
+    const onCancel = vi.fn();
+    render(
+      <SyncProgressView
+        cancelling={false}
+        onCancel={onCancel}
+        progress={{
+          phase: "indexing",
+          total: 2144,
+          discovered: 2144,
+          fetched: 200,
+          embedded: 175,
+          persisted: 150,
+          indexed: 125,
+          unchanged: 0,
+          deleted: 0,
+          failed: 1,
+          bytes_fetched: 1000,
+          docs_per_second: 4.8,
+          estimated_seconds_remaining: 415,
+        }}
+      />
+    );
+
+    expect(screen.getByRole("progressbar", { name: "同步进度" })).toHaveAttribute(
+      "aria-valuenow",
+      "6"
+    );
+    expect(screen.getByText("126 / 2144")).toBeInTheDocument();
+    expect(screen.getByText("4.8 篇/秒")).toBeInTheDocument();
+    expect(screen.getByText("预计剩余 415 秒")).toBeInTheDocument();
+    expect(screen.getByText("1 篇失败")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "取消同步" }));
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 });

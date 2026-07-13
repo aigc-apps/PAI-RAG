@@ -1,3 +1,4 @@
+# ruff: noqa: E401
 # tests/app/test_lean_agent_core.py
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -23,19 +24,18 @@ def test_agent_core_imports_without_trace(monkeypatch):
     assert agent_mod.Agent is not None
 
 
-def test_budgeting_without_tokenizer(monkeypatch):
+def test_budgeting_has_no_tokenizer_dependency():
     import agent.budgeting as b
-    monkeypatch.setattr(b, "get_tokenizer", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
+    assert not hasattr(b, "get_tokenizer")
     mgr = b.AgentMessageManager(context_window=110000, max_output_tokens=8000)
-    # estimate still returns a positive int via the length fallback
+    assert not hasattr(mgr, "tokenizer")
     n = mgr.estimate_msg_tokens({"role": "user", "content": "hello world this is some text"})
     assert isinstance(n, int) and n > 0
 
 
-def test_cap_tool_result_structural_without_tokenizer(monkeypatch):
+def test_cap_tool_result_structural_without_tokenizer():
     import json as _json
     import agent.budgeting as b
-    monkeypatch.setattr(b, "get_tokenizer", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no tokenizer")))
     mgr = b.AgentMessageManager(context_window=110000, max_output_tokens=8000)
     mgr.max_tool_result_tokens = 100  # force the truncation path
 

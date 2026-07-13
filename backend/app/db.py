@@ -85,8 +85,10 @@ def _alembic_config(db_url: str) -> Config:
     cfg = Config(str(_ALEMBIC_INI))
     # Absolute script location so it resolves regardless of the process cwd.
     cfg.set_main_option("script_location", str(_BACKEND_DIR / "alembic"))
-    # env.py reads this as the target DB (see its _db_url priority order).
-    cfg.set_main_option("sqlalchemy.url", db_url)
+    # Runtime URLs must bypass ConfigParser interpolation: percent escapes in
+    # credentials (for example %40 for "@") are valid SQLAlchemy URL syntax but
+    # invalid as raw ConfigParser values. env.py reads this attribute directly.
+    cfg.attributes["db_url"] = db_url
     return cfg
 
 

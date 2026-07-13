@@ -1,3 +1,4 @@
+# ruff: noqa: E401, E402
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -6,8 +7,7 @@ from agent.budgeting import AgentMessageManager, approx_tokens
 
 
 def _mgr():
-    # No tokenizer in this env → exact path uses the char/4 fallback, which is fine:
-    # these tests exercise the fast-path/cache wiring, not tokenizer accuracy.
+    # These tests exercise the character-estimate fast path and cache wiring.
     return AgentMessageManager(context_window=110000, max_output_tokens=8000)
 
 
@@ -81,14 +81,14 @@ def test_estimate_msg_tokens_is_cached_by_content():
 
 # --------------------------------------------------------------------------- #
 # cap_tool_result: length is a provable upper bound, so small results skip the
-# tokenizer entirely; oversized ones still truncate.
+# estimator entirely; oversized ones still truncate.
 # --------------------------------------------------------------------------- #
 def test_cap_tool_result_small_never_tokenizes(monkeypatch):
     mgr = _mgr()
     mgr.max_tool_result_tokens = 100
     monkeypatch.setattr(
         b, "_estimate_tokens",
-        lambda *a, **k: (_ for _ in ()).throw(AssertionError("tokenizer must not run")),
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("estimator must not run")),
     )
     small = "x" * 100                              # 100 chars ≤ cap ⇒ tokens ≤ 100
     assert mgr.cap_tool_result(small) == small

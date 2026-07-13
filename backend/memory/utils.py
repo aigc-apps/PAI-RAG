@@ -1,57 +1,30 @@
-from functools import lru_cache
-from typing import List, Tuple, Any
+from typing import List, Tuple
 
 try:
-    # Heavy ML dep — only needed by the message-context helpers below.
-    # Kept optional so lean importers (e.g. agent.budgeting via the
-    # tokenizer helpers) don't transitively pull llama_index at import time.
+    # Optional message types used only by the legacy message-context helpers.
     from llama_index.core.base.llms.types import ChatMessage, MessageRole
 except ImportError:  # pragma: no cover - exercised only in lean envs
     ChatMessage = None
     MessageRole = None
 
-TOKENIZATION_MODEL = "resources/tokenizer/Qwen3-32B-Tokenizer"
+CJK_CHARS_PER_TOKEN = 1.5
+OTHER_CHARS_PER_TOKEN = 2.5
 
 
-@lru_cache(maxsize=1)
-def get_tokenizer():
-    # Imported lazily so transformers (torch/accelerate/safetensors/tokenizers)
-    # is pulled only when a real tokenizer is actually requested at runtime.
-    # Cached process-wide: from_pretrained parses the ~11MB tokenizer.json and
-    # is a per-call cost, so on the hot path (one AgentMessageManager per chat
-    # turn) it MUST be built once, not on every request's event loop.
-    from transformers import AutoTokenizer
-    tokenizer = AutoTokenizer.from_pretrained(TOKENIZATION_MODEL, local_files_only=True, use_fast=True)
-    return tokenizer
-
-
-def estimate_tokens_in_text(
-    text: str,
-    return_offsets_mapping: bool = True,
-    tokenizer: Any = None,
-) -> int:
-    """
-    Estimate token length for a given text.
-
-    Args:
-        text (str): The text to estimate the tokens length for.
-
-    Returns:
-        int: The estimated tokens length.
-
-    """
+def estimate_tokens_in_text(text: str) -> int:
+    """Conservatively estimate tokens from Latin/CJK character counts."""
     if not text:
         return 0
-    tokenizer = tokenizer or get_tokenizer()
-    result = tokenizer(text, return_offsets_mapping=return_offsets_mapping, return_attention_mask=False, add_special_tokens=False)
-    token_ids = result["input_ids"]
-    return len(token_ids)
+    n_chars = len(text)
+    n_bytes = len(text.encode("utf-8"))
+    cjk = min((n_bytes - n_chars) / 2, n_chars)
+    other = n_chars - cjk
+    return int(cjk / CJK_CHARS_PER_TOKEN + other / OTHER_CHARS_PER_TOKEN)
 
 def truncate(
     text: str,
     max_token: int,
     start_token: int = 0,
-    tokenizer: Any = None,
 ) -> Tuple[str, int]:
     if not text:
         return text, 0
@@ -59,18 +32,13 @@ def truncate(
         return "", 0
     assert start_token >= 0, "start_token must be >= 0"
 
-    tokenizer = tokenizer or get_tokenizer()
-    result = tokenizer(text, return_offsets_mapping=True)
-    token_ids, offset_mapping = result["input_ids"], result["offset_mapping"]
-    start_token_offset_mapping_left = offset_mapping[start_token][0]
-    if max_token > len(token_ids):
-        text = text[start_token_offset_mapping_left:]
-        return text, len(token_ids[start_token:])
-    else:
-        # start_token大于等于0, 此时max_token大于start_token,大于等于1
-        last_token_offset_mapping_right = offset_mapping[max_token - 1][1]
-        text = text[start_token_offset_mapping_left:last_token_offset_mapping_right]
-        return text, max_token - start_token
+    total = estimate_tokens_in_text(text)
+    if total <= start_token:
+        return "", 0
+    start_char = int(len(text) * start_token / max(total, 1))
+    end_char = int(len(text) * min(max_token, total) / max(total, 1))
+    result = text[start_char:end_char]
+    return result, estimate_tokens_in_text(result)
 
 
 def get_message_context(msg: ChatMessage) -> str:
@@ -88,7 +56,7 @@ def get_message_context(msg: ChatMessage) -> str:
         return text
 
 
-def estimate_tokens_in_message(message: ChatMessage, tokenizer: Any = None) -> str:
+def estimate_tokens_in_message(message: ChatMessage) -> int:
     """
     Estimate tokens length for a single message.
 
@@ -102,16 +70,16 @@ def estimate_tokens_in_message(message: ChatMessage, tokenizer: Any = None) -> s
     tokens = 0
 
     if message.role:
-        tokens += estimate_tokens_in_text(message.role, tokenizer)
+        tokens += estimate_tokens_in_text(str(message.role))
 
     text = get_message_context(message)
-    tokens += estimate_tokens_in_text(text, tokenizer)
+    tokens += estimate_tokens_in_text(text)
 
     additional_kwargs = {**message.additional_kwargs}
 
     if "tool_calls" in additional_kwargs:
         for tool_call in additional_kwargs["tool_calls"]:
-            tokens += estimate_tokens_in_text(str(tool_call), tokenizer)
+            tokens += estimate_tokens_in_text(str(tool_call))
 
     return tokens
 

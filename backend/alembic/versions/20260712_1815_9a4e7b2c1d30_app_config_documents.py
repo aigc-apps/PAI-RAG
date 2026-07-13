@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("revision", sa.Integer(), nullable=False),
         sa.Column("checksum", sqlmodel.sql.sqltypes.AutoString(length=128), nullable=False),
         sa.Column("updated_by", sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("app_config_documents", schema=None) as batch_op:
@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column("document_json", sa.JSON(), nullable=True),
         sa.Column("checksum", sqlmodel.sql.sqltypes.AutoString(length=128), nullable=False),
         sa.Column("updated_by", sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
-        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     with op.batch_alter_table("app_config_revisions", schema=None) as batch_op:

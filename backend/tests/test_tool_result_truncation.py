@@ -1,3 +1,4 @@
+# ruff: noqa: E401, E402
 import sys, os, json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -63,21 +64,21 @@ def test_shrink_nested_json_in_string():
 
 
 # --------------------------------------------------------------------------- #
-# smart_truncate — end to end (char-based fallback, tokenizer=None)
+# smart_truncate — end to end (character-estimated)
 # --------------------------------------------------------------------------- #
 def test_small_content_returned_unchanged():
-    assert smart_truncate("hello world", 5000, None) == "hello world"
-    assert smart_truncate("", 5000, None) == ""
+    assert smart_truncate("hello world", 5000) == "hello world"
+    assert smart_truncate("", 5000) == ""
 
 
 def test_plain_text_keeps_head_and_tail():
     content = "HEADSTART " + ("filler " * 20000) + " TAILEND"
-    out = smart_truncate(content, 100, None)
+    out = smart_truncate(content, 100)
     assert out.endswith(TRUNCATED_MARKER)
     assert "HEADSTART" in out                                      # head preserved
     assert "TAILEND" in out                                        # tail preserved (the point)
     assert "tokens omitted" in out                                 # middle elided
-    assert _estimate(out, None) < _estimate(content, None)
+    assert _estimate(out) < _estimate(content)
 
 
 def test_json_reduces_fits_and_preserves_tail():
@@ -85,38 +86,28 @@ def test_json_reduces_fits_and_preserves_tail():
              "TotalCount": 103}
     content = json.dumps({"exit_code": 0, "stdout": json.dumps(inner), "stderr": ""})
     cap = 200
-    out = smart_truncate(content, cap, None)
+    out = smart_truncate(content, cap)
     assert out.endswith(TRUNCATED_MARKER)
-    assert _estimate(out, None) < _estimate(content, None)         # large reduction
-    assert _estimate(out, None) <= cap + 40                        # backstop fits (+marker overhead)
+    assert _estimate(out) < _estimate(content)         # large reduction
+    assert _estimate(out) <= cap + 40                  # backstop fits (+marker overhead)
     assert "Services" in out                                       # head structure survives
     assert "TotalCount" in out                                     # tail survives backstop
 
 
 def test_non_json_over_cap_uses_text_path():
     content = "line-of-logs\n" * 5000  # not valid JSON
-    out = smart_truncate(content, 50, None)
+    out = smart_truncate(content, 50)
     assert out.endswith(TRUNCATED_MARKER)
     assert "tokens omitted" in out
-    assert _estimate(out, None) <= 50 + 40
+    assert _estimate(out) <= 50 + 40
 
 
-def test_text_head_tail_token_branch(monkeypatch):
-    # Exercise the real-tokenizer branch (truncate with start_token for the tail)
-    # with a fake 1-token-per-char tokenizer, since the Qwen tokenizer resource
-    # isn't present in CI.
+def test_text_head_tail_is_character_estimated_only():
     import agent.tool_result_truncation as t
-
-    monkeypatch.setattr(t, "estimate_tokens_in_text",
-                        lambda text, tokenizer=None: len(text))
-
-    def fake_truncate(text, max_token, start_token=0, tokenizer=None):
-        return text[start_token:max_token], max(0, max_token - start_token)
-
-    monkeypatch.setattr(t, "truncate", fake_truncate)
-
-    text = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"  # 26 "tokens"
-    out = t._text_head_tail(text, max_tokens=10, tokenizer=object())
-    assert out.startswith("ABCDEFGH")   # head 8 tokens
-    assert out.endswith("YZ")           # tail 2 tokens (via start_token window)
+    assert not hasattr(t, "estimate_tokens_in_text")
+    assert not hasattr(t, "truncate")
+    text = "ABCDEFGHIJKLMNOPQRSTUVWXYZ" * 10
+    out = t._text_head_tail(text, max_tokens=10)
+    assert out.startswith("ABCDEFGHIJKLMNOPQRST")
+    assert out.endswith("VWXYZ")
     assert "tokens omitted" in out

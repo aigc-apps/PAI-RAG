@@ -1,5 +1,7 @@
 from __future__ import annotations
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 
 class Settings(BaseSettings):
@@ -8,6 +10,11 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     default_model: str = "openai/gpt-4o-mini"
     db_url: str = "sqlite+aiosqlite:///./data/agent.db"
+    db_host: str = ""
+    db_port: int = 5432
+    db_name: str = ""
+    db_user: str = ""
+    db_password: str = ""
     store_backend: str = "sql"   # "sql" | "memory"
     # Run Alembic migrations automatically on boot for persistent DBs. Leave on
     # for local/dev convenience; set AUTO_MIGRATE=false in prod to migrate
@@ -99,6 +106,69 @@ class Settings(BaseSettings):
     # write contention. `job_max_attempts` bounds retries before a job is failed.
     job_worker_concurrency: int = 4
     job_max_attempts: int = 3
+    # Production offline-sync pipeline limits. All values are bounded below in
+    # `build_database_url` so an invalid env override cannot disable progress or
+    # create unbounded external-service pressure.
+    sync_fetch_concurrency: int = 16
+    sync_fetch_queue_size: int = 100
+    sync_embedding_concurrency: int = 6
+    sync_sql_batch_documents: int = 25
+    sync_sql_batch_chunks: int = 2_000
+    sync_es_bulk_target_bytes: int = 5 * 1024 * 1024
+    sync_es_bulk_max_bytes: int = 10 * 1024 * 1024
+    sync_progress_interval_seconds: float = 5.0
+    job_heartbeat_seconds: float = 10.0
+    job_lease_seconds: float = 60.0
+
+    @model_validator(mode="after")
+    def build_database_url(self) -> "Settings":
+        if "db_url" not in self.model_fields_set:
+            separate_fields = {"db_host", "db_name", "db_user", "db_password"}
+            if separate_fields & self.model_fields_set:
+                missing = [
+                    name.upper()
+                    for name in ("db_host", "db_name", "db_user", "db_password")
+                    if not getattr(self, name)
+                ]
+                if missing:
+                    raise ValueError(
+                        "separate database configuration requires "
+                        + ", ".join(missing)
+                    )
+
+                self.db_url = URL.create(
+                    "postgresql+asyncpg",
+                    username=self.db_user,
+                    password=self.db_password,
+                    host=self.db_host,
+                    port=self.db_port,
+                    database=self.db_name,
+                ).render_as_string(hide_password=False)
+
+        self.sync_fetch_concurrency = min(64, max(1, self.sync_fetch_concurrency))
+        self.sync_fetch_queue_size = min(1_000, max(1, self.sync_fetch_queue_size))
+        self.sync_embedding_concurrency = min(
+            16, max(1, self.sync_embedding_concurrency)
+        )
+        self.sync_sql_batch_documents = min(
+            200, max(1, self.sync_sql_batch_documents)
+        )
+        self.sync_sql_batch_chunks = min(10_000, max(1, self.sync_sql_batch_chunks))
+        self.sync_es_bulk_target_bytes = min(
+            10 * 1024 * 1024, max(1024 * 1024, self.sync_es_bulk_target_bytes)
+        )
+        self.sync_es_bulk_max_bytes = min(
+            20 * 1024 * 1024,
+            max(self.sync_es_bulk_target_bytes, self.sync_es_bulk_max_bytes),
+        )
+        self.sync_progress_interval_seconds = max(
+            1.0, self.sync_progress_interval_seconds
+        )
+        self.job_heartbeat_seconds = max(1.0, self.job_heartbeat_seconds)
+        self.job_lease_seconds = max(
+            self.job_heartbeat_seconds * 3, self.job_lease_seconds
+        )
+        return self
 
 
 def get_settings() -> Settings:

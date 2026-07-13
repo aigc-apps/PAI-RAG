@@ -1,9 +1,11 @@
+# ruff: noqa: E402
 """Retrieval-engine tests: local pagination, the Elasticsearch DSL (against a
 fake async client — no live server), and auto-mode fallback to local."""
 
 import asyncio
 import os
 import sys
+from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -67,6 +69,9 @@ class _FakeIndices:
         self._p.deleted.append(index)
         self._p.created.discard(index)
 
+    async def refresh(self, index):
+        self._p.refreshed.append(index)
+
 
 class FakeES:
     def __init__(self):
@@ -76,6 +81,7 @@ class FakeES:
         self.bulk_calls: list[dict] = []
         self.delete_by_query_calls: list[dict] = []
         self.search_calls: list[dict] = []
+        self.refreshed: list[str] = []
         self.indices = _FakeIndices(self)
         self._search_response = {"hits": {"total": {"value": 0}, "hits": []}}
 
@@ -140,7 +146,9 @@ def test_es_index_chunks_bulk_replaces_document():
     asyncio.run(eng.index_chunks(_FakeKB(), _FakeDoc(), chunks))
     # old doc chunks removed before re-indexing
     assert fake.delete_by_query_calls
-    assert fake.delete_by_query_calls[0]["query"] == {"term": {"document_id": "doc_1"}}
+    assert fake.delete_by_query_calls[0]["query"] == {
+        "terms": {"document_id": ["doc_1"]}
+    }
     ops = fake.bulk_calls[0]["operations"]
     # action/source pairs → 2 chunks = 4 entries
     assert len(ops) == 4
@@ -149,6 +157,54 @@ def test_es_index_chunks_bulk_replaces_document():
     assert ops[1]["title"] == "安装指南"
     assert ops[1]["status"] == "active"
     assert len(ops[1]["embedding"]) == 64
+    assert fake.bulk_calls[0]["refresh"] is True
+
+
+def test_es_document_batch_uses_one_delete_and_size_bounded_bulks():
+    fake = FakeES()
+    eng = ElasticsearchEngine(
+        "http://es:9200",
+        index_prefix="kb",
+        client_factory=lambda: fake,
+        bulk_target_bytes=1_024,
+        bulk_max_bytes=4_096,
+    )
+    doc1 = SimpleNamespace(
+        id="doc_1", title="安装", uri="docs/1", source_type="text",
+        category="guide", tags=["pai"],
+    )
+    doc2 = SimpleNamespace(
+        id="doc_2", title="调优", uri="docs/2", source_type="text",
+        category="guide", tags=["pai"],
+    )
+    chunks1 = [
+        {"chunk_id": f"a{i}", "chunk_index": i, "text": "安装" * 80,
+         "embedding": [0.1] * 64}
+        for i in range(3)
+    ]
+    chunks2 = [
+        {"chunk_id": f"b{i}", "chunk_index": i, "text": "调优" * 80,
+         "embedding": [0.2] * 64}
+        for i in range(3)
+    ]
+
+    result = asyncio.run(
+        eng.index_document_batch(
+            _FakeKB(), [(doc1, chunks1), (doc2, chunks2)], refresh=False
+        )
+    )
+
+    assert len(fake.delete_by_query_calls) == 1
+    assert fake.delete_by_query_calls[0]["query"] == {
+        "terms": {"document_id": ["doc_1", "doc_2"]}
+    }
+    assert len(fake.bulk_calls) > 1
+    assert all(call["refresh"] is False for call in fake.bulk_calls)
+    assert result.indexed_document_ids == {"doc_1", "doc_2"}
+    assert result.failed_document_ids == set()
+
+    asyncio.run(eng.refresh_kb("kb_test"))
+    assert fake.refreshed == ["kb-kb_test"]
 
 
 def test_es_hybrid_search_dsl_has_knn_and_bm25():
@@ -263,6 +319,19 @@ def test_build_search_engine_from_vectordb_elasticsearch():
     assert isinstance(eng, ElasticsearchEngine)
     assert eng._url == "http://es:9200"
     assert eng._api_key == "k"
+
+
+def test_vectordb_engine_uses_pipeline_bulk_limits_from_settings():
+    cfg = VectorDBConfig(engine="elasticsearch", url="http://es:9200")
+    settings = SimpleNamespace(
+        sync_es_bulk_target_bytes=12_345,
+        sync_es_bulk_max_bytes=67_890,
+    )
+
+    eng = build_search_engine(settings, "sql_engine_sentinel", vectordb=cfg)
+
+    assert eng._bulk_target_bytes == 12_345
+    assert eng._bulk_max_bytes == 67_890
 
 
 def test_build_search_engine_from_vectordb_local():

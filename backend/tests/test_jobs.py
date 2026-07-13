@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Durable background job queue — claim/dispatch/retry/recover mechanics.
 
 Offline, no heavy deps: handlers are plain in-memory callables. Each test runs
@@ -14,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from datetime import timedelta
 
 from app.db import create_all, make_engine
-from app.jobs import JobQueue, _now
+from app.jobs import JobOutcome, JobQueue, _now
 from app.models import BackgroundJobRow
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -29,6 +30,23 @@ async def _fresh_queue(**kw) -> JobQueue:
 async def _get(q: JobQueue, job_id: str) -> BackgroundJobRow:
     async with AsyncSession(q._engine) as s:
         return await s.get(BackgroundJobRow, job_id)
+
+
+def test_handler_can_return_terminal_failed_outcome():
+    async def scenario():
+        q = await _fresh_queue()
+
+        async def handler(_payload):
+            return JobOutcome(status="failed", result={"failed": 2})
+
+        q.register("terminal-failure", handler)
+        job_id = await q.enqueue(kind="terminal-failure")
+        await q.run_until_empty()
+        row = await _get(q, job_id)
+        assert row.status == "failed"
+        assert row.result == {"failed": 2}
+
+    asyncio.run(scenario())
 
 
 def test_enqueue_claim_process_succeeds():
@@ -100,7 +118,7 @@ def test_retry_backoff_defers_next_attempt():
         assert processed == 1          # only the first attempt runs now
 
         row = await _get(q, job_id)
-        assert row.status == "queued"
+        assert row.status == "retry_wait"
         assert row.attempts == 1
         # deferred to the future (SQLite round-trips datetimes tz-naive, so we
         # don't compare against tz-aware _now(); the deferral itself is already
@@ -204,6 +222,66 @@ def test_concurrent_claim_single_winner():
         winners = [j for j in (a, b) if j is not None]
         assert len(winners) == 1
         assert winners[0].status == "running"
+
+    asyncio.run(scenario())
+
+
+def test_expired_running_lease_is_reclaimed():
+    async def scenario():
+        q = await _fresh_queue(lease_seconds=60)
+        job_id = await q.enqueue(kind="x", payload={})
+        claimed = await q.claim_one("dead-worker")
+        assert claimed is not None
+
+        async with AsyncSession(q._engine) as s:
+            row = await s.get(BackgroundJobRow, job_id)
+            row.lease_expires_at = _now() - timedelta(seconds=1)
+            s.add(row)
+            await s.commit()
+
+        reclaimed = await q.claim_one("live-worker")
+        assert reclaimed is not None
+        assert reclaimed.id == job_id
+        assert reclaimed.worker_id == "live-worker"
+
+    asyncio.run(scenario())
+
+
+def test_checkpoint_and_cancel_are_durable():
+    async def scenario():
+        q = await _fresh_queue()
+        job_id = await q.enqueue(kind="x", payload={})
+
+        await q.checkpoint(job_id, {"phase": "fetching", "fetched": 8})
+        assert await q.request_cancel(job_id) is True
+
+        row = await _get(q, job_id)
+        assert row.progress == {"phase": "fetching", "fetched": 8}
+        assert row.cancel_requested_at is not None
+        assert await q.is_cancel_requested(job_id) is True
+
+    asyncio.run(scenario())
+
+
+def test_context_handler_can_return_partial_outcome():
+    async def scenario():
+        q = await _fresh_queue()
+
+        async def handler(payload, ctx):
+            await ctx.checkpoint({"phase": "indexing", "indexed": 2})
+            return JobOutcome(status="partial", result={"failed": 1})
+
+        q.register("sync", handler)
+        job_id = await q.enqueue(kind="sync", payload={})
+
+        assert await q.run_until_empty() == 1
+        row = await _get(q, job_id)
+        assert row.status == "partial"
+        assert row.result == {"failed": 1}
+        assert row.progress == {"phase": "indexing", "indexed": 2}
+        assert row.finished_at is not None
+        assert row.worker_id is None
+        assert row.lease_expires_at is None
 
     asyncio.run(scenario())
 

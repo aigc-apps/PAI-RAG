@@ -5,12 +5,13 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
-  createDataSource, createKnowledgeBase, deleteDataSource, deleteKnowledgeBase,
+  cancelDataSourceSync, createDataSource, createKnowledgeBase, deleteDataSource, deleteKnowledgeBase,
   getUploadSupport, importKnowledgeDocument, listDataSources,
   listKnowledgeBases, listKnowledgeChunks, listKnowledgeDocuments, searchKnowledge,
   syncDataSource, updateDataSource, updateKnowledgeBase, uploadKnowledgeDocument,
   type KnowledgeBase, type KnowledgeBasePatch, type KnowledgeChunk,
   type KnowledgeDataSource, type KnowledgeDocument, type KnowledgeHit,
+  type KnowledgeSyncProgress,
 } from "../api/knowledge";
 import { listModels, modelsByType, type ModelInfo } from "../api/models";
 import { EngineStatusBadge, useEngineStatus } from "./EngineStatus";
@@ -248,6 +249,7 @@ export function KnowledgeView({
           bases={bases} loading={loading}
           onOpen={onOpenKb}
           onCreated={async (id) => { await refresh(); onOpenKb(id); }}
+          onChanged={refresh}
         />
       </div>
     </div>
@@ -262,12 +264,25 @@ function TopBar({ onBack, crumb }: { onBack: () => void; crumb: ReactNode }) {
 // ======================================================================== //
 // List
 // ======================================================================== //
-function KbList({ bases, loading, onOpen, onCreated }: {
+function KbList({ bases, loading, onOpen, onCreated, onChanged }: {
   bases: KnowledgeBase[]; loading: boolean;
   onOpen: (id: string) => void; onCreated: (id: string) => void;
+  onChanged: () => Promise<KnowledgeBase[]>;
 }) {
   const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
+  const [editing, setEditing] = useState<KnowledgeBase | null>(null);
+
+  const remove = async (kb: KnowledgeBase) => {
+    if (!confirm(t("kbview.confirmDeleteKb", { name: kb.name }))) return;
+    try {
+      await deleteKnowledgeBase(kb.id);
+      toast.success(t("kbview.deleted"));
+      await onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("kbview.deleteFailed"));
+    }
+  };
 
   return (
     <div className="workspace-container">
@@ -303,7 +318,14 @@ function KbList({ bases, loading, onOpen, onCreated }: {
         </div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))" }}>
-          {bases.map((kb) => <KbCard key={kb.id} kb={kb} onOpen={() => onOpen(kb.id)} />)}
+          {bases.map((kb) => (
+            <KbCard
+              key={kb.id} kb={kb}
+              onOpen={() => onOpen(kb.id)}
+              onEdit={() => setEditing(kb)}
+              onDelete={() => void remove(kb)}
+            />
+          ))}
         </div>
       )}
 
@@ -312,26 +334,41 @@ function KbList({ bases, loading, onOpen, onCreated }: {
         onClose={() => setShowCreate(false)}
         onCreated={(id) => { setShowCreate(false); onCreated(id); }}
       />
+      <EditKbDrawer
+        kb={editing}
+        onClose={() => setEditing(null)}
+        onSaved={async () => { setEditing(null); await onChanged(); }}
+      />
     </div>
   );
 }
 
-function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
+function KbCard({ kb, onOpen, onEdit, onDelete }: {
+  kb: KnowledgeBase; onOpen: () => void; onEdit: () => void; onDelete: () => void;
+}) {
   const { t } = useI18n();
   const emb = kb.embedding_config ?? {};
   const parser = parserOf(kb);
   return (
-    <button
-      type="button" onClick={onOpen}
-      className="professional-card professional-card-hover flex min-h-[170px] flex-col gap-3 p-[18px] text-left"
-    >
+    <div className="professional-card professional-card-hover relative flex min-h-[170px] flex-col gap-3 p-[18px] text-left">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[15px] font-semibold">{kb.name}</h3>
-        <Pill status={kb.status} />
+        <button type="button" onClick={onOpen} className="focus-ring min-w-0 flex-1 rounded text-left">
+          <h3 className="truncate text-[15px] font-semibold">{kb.name}</h3>
+        </button>
+        <div className="flex items-center gap-1">
+          <Pill status={kb.status} />
+          <button type="button" className={ICON_BTN} title={t("common.edit")} aria-label={`${t("common.edit")} ${kb.name}`} onClick={onEdit}>
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button type="button" className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title={t("common.delete")} aria-label={`${t("common.delete")} ${kb.name}`} onClick={onDelete}>
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
-      <div className="min-h-[20px] truncate text-[13px] text-[var(--text-muted)]">
-        {kb.description || t("kbview.noDescription")}
-      </div>
+      <button type="button" onClick={onOpen} className="focus-ring flex flex-1 flex-col gap-3 rounded text-left">
+        <div className="min-h-[20px] truncate text-[13px] text-[var(--text-muted)]">
+          {kb.description || t("kbview.noDescription")}
+        </div>
       <div className="flex items-center gap-4 border-y border-[var(--border)] py-2.5 text-xs text-[var(--text-muted)]">
         <span><b className="font-semibold text-[var(--text)]">{kb.document_count}</b> {t("kbview.docs")}</span>
         <span><b className="font-semibold text-[var(--text)]">{kb.chunk_count}</b> {t("kbview.chunks")}</span>
@@ -342,7 +379,58 @@ function KbCard({ kb, onOpen }: { kb: KnowledgeBase; onOpen: () => void }) {
         <Chip>{t("kbview.chipVector")} <span className="text-[var(--text-faint)]">{str(kb.vector_store_config?.provider_id, "local_sql")}</span></Chip>
         <Chip>{t("kbview.chipChunk")} <span className="text-[var(--text-faint)]">{parser.chunk_size}/{parser.chunk_overlap}</span></Chip>
       </div>
-    </button>
+      </button>
+    </div>
+  );
+}
+
+function EditKbDrawer({ kb, onClose, onSaved }: {
+  kb: KnowledgeBase | null; onClose: () => void; onSaved: () => Promise<void>;
+}) {
+  const { t } = useI18n();
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [visibility, setVisibility] = useState("private");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!kb) return;
+    setName(kb.name);
+    setDescription(kb.description ?? "");
+    setVisibility(kb.visibility);
+  }, [kb]);
+
+  const save = async () => {
+    if (!kb || !name.trim()) return;
+    setSaving(true);
+    try {
+      await updateKnowledgeBase(kb.id, { name: name.trim(), description: description.trim(), visibility });
+      toast.success(t("kbview.configSaved"));
+      await onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("kbview.saveFailed"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Drawer open={!!kb} title={t("kbview.editKb")} onClose={onClose} footer={<>
+      <button type="button" className={BTN_GHOST} onClick={onClose}>{t("common.cancel")}</button>
+      <button type="button" className={BTN_PRIMARY} disabled={saving || !name.trim()} onClick={() => void save()}>
+        {saving && <Loader2 className="h-4 w-4 animate-spin" />} {t("common.save")}
+      </button>
+    </>}>
+      <Field label={t("kbview.name")}><input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} /></Field>
+      <Field label={t("kbview.description")}><input className={INPUT} value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("common.optional")} /></Field>
+      <Field label={t("kbview.visibility")}>
+        <select className={INPUT} value={visibility} onChange={(e) => setVisibility(e.target.value)}>
+          <option value="private">{t("kbview.visPrivate")}</option>
+          <option value="workspace">{t("kbview.visWorkspace")}</option>
+          <option value="public">public</option>
+        </select>
+      </Field>
+    </Drawer>
   );
 }
 
@@ -643,12 +731,54 @@ function sourceSummary(ds: KnowledgeDataSource): string {
   return "—";
 }
 
+export function SyncProgressView({ progress, cancelling, onCancel }: {
+  progress: KnowledgeSyncProgress;
+  cancelling: boolean;
+  onCancel: () => void;
+}) {
+  const { t } = useI18n();
+  const completed = progress.indexed + progress.unchanged + progress.failed;
+  const percent = progress.total > 0
+    ? Math.min(100, Math.max(0, Math.round((completed / progress.total) * 100)))
+    : 0;
+  const phaseKey = `kbview.syncPhase.${progress.phase}` as MessageKey;
+  return (
+    <div className="ml-[38px] space-y-2 rounded-[var(--radius)] bg-[var(--surface-subtle)] p-3">
+      <div className="flex items-center justify-between text-[12px]">
+        <span className="font-medium">{t(phaseKey)}</span>
+        <span className="font-mono tabular-nums">{completed} / {progress.total}</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-label={t("kbview.syncProgress")}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={percent}
+        className="h-2 overflow-hidden rounded-full bg-[var(--border)]"
+      >
+        <div className="h-full rounded-full bg-[var(--accent)] transition-[width]" style={{ width: `${percent}%` }} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-muted)]">
+        <span>{t("kbview.syncThroughput", { rate: progress.docs_per_second ?? 0 })}</span>
+        {progress.estimated_seconds_remaining != null && (
+          <span>{t("kbview.syncEta", { seconds: progress.estimated_seconds_remaining })}</span>
+        )}
+        {progress.failed > 0 && <span className="text-[var(--danger)]">{t("kbview.syncProgressFailed", { count: progress.failed })}</span>}
+        <button className={cn(BTN_GHOST, "ml-auto py-1 text-[11px]")} disabled={cancelling} onClick={onCancel}>
+          {cancelling ? t("kbview.cancelling") : t("kbview.cancelSync")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Promise<void> }) {
   const { t } = useI18n();
   const [sources, setSources] = useState<KnowledgeDataSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<KnowledgeDataSource | "new" | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const refresh = async () => {
     try { setSources(await listDataSources(kb.id)); }
@@ -657,9 +787,9 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
   };
   useEffect(() => { setLoading(true); void refresh(); }, [kb.id]);
 
-  // poll while any source is syncing; also refresh the KB counts when it settles
+  // active_job_id is authoritative; status can be stale during lease recovery.
   useEffect(() => {
-    if (!sources.some((s) => s.status === "syncing")) return;
+    if (!sources.some((s) => !!s.active_job_id || s.status === "syncing")) return;
     const timer = setTimeout(async () => { await refresh(); void onChanged(); }, 2500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -673,6 +803,14 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
       await refresh();
     } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.syncFailedToast")); }
     finally { setBusyId(null); }
+  };
+
+  const cancelSync = async (ds: KnowledgeDataSource) => {
+    setCancellingId(ds.id);
+    try {
+      await cancelDataSourceSync(kb.id, ds.id);
+      await refresh();
+    } catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.cancelSyncFailed")); }
   };
 
   const toggleEnabled = async (ds: KnowledgeDataSource) => {
@@ -713,7 +851,7 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
       ) : (
         <div className="grid gap-3">
           {sources.map((ds) => {
-            const syncing = ds.status === "syncing";
+            const syncing = ds.status === "syncing" || !!ds.active_job_id;
             const rep = ds.last_sync_report || {};
             return (
               <div key={ds.id} className={cn(CARD, "flex flex-col gap-2.5")}>
@@ -731,6 +869,14 @@ function DataSourcePanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () =
                   </div>
                   <Pill status={ds.status} />
                 </div>
+
+                {ds.active_job_id && ds.sync_progress && (
+                  <SyncProgressView
+                    progress={ds.sync_progress}
+                    cancelling={cancellingId === ds.id}
+                    onCancel={() => void cancelSync(ds)}
+                  />
+                )}
 
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pl-[38px] text-[12px] text-[var(--text-muted)]">
                   <span><b className="font-semibold text-[var(--text)] tabular-nums">{ds.doc_count}</b> {t("kbview.docs")}</span>

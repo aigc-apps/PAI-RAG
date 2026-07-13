@@ -2,19 +2,23 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional
 from sqlmodel import SQLModel, Field, Column
-from sqlalchemy import JSON, BigInteger, Text
+from sqlalchemy import JSON, BigInteger, DateTime, Text
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _utc_field(**kwargs):
+    return Field(sa_type=DateTime(timezone=True), **kwargs)
+
+
 class Conversation(SQLModel, table=True):
     __tablename__ = "conversations"
     id: str = Field(primary_key=True, max_length=64)
     user_id: Optional[str] = Field(default=None, index=True, max_length=64)
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
     title: Optional[str] = Field(default=None, max_length=200)
     last_response_id: Optional[str] = Field(default=None, max_length=64)
     summary: Optional[str] = Field(default=None, sa_column=Column("summary", Text))
@@ -32,7 +36,7 @@ class ConversationItem(SQLModel, table=True):
     content: dict = Field(default_factory=dict, sa_column=Column(JSON))
     response_id: Optional[str] = Field(default=None, index=True, max_length=64)
     user_id: Optional[str] = Field(default=None, index=True, max_length=64)
-    created_at: datetime = Field(default_factory=_now)
+    created_at: datetime = _utc_field(default_factory=_now)
 
 
 class UserRow(SQLModel, table=True):
@@ -48,8 +52,8 @@ class UserRow(SQLModel, table=True):
     role: str = Field(default="user", max_length=16)          # admin | user
     status: str = Field(default="active", max_length=16)      # invited | active | disabled
     invite_token_hash: Optional[str] = Field(default=None, max_length=128)
-    invite_expires_at: Optional[datetime] = Field(default=None)
-    created_at: datetime = Field(default_factory=_now)
+    invite_expires_at: Optional[datetime] = _utc_field(default=None)
+    created_at: datetime = _utc_field(default_factory=_now)
     meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
 
 
@@ -62,7 +66,7 @@ class ResponseRow(SQLModel, table=True):
     status: str = Field(max_length=32)
     usage: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     error: Optional[dict] = Field(default=None, sa_column=Column(JSON))
-    created_at: datetime = Field(default_factory=_now)
+    created_at: datetime = _utc_field(default_factory=_now)
     meta: dict = Field(default_factory=dict, sa_column=Column("metadata", JSON))
 
 
@@ -74,8 +78,8 @@ class MemoryRow(SQLModel, table=True):
     kind: str = Field(default="fact", max_length=32)
     source_response_id: Optional[str] = Field(default=None, max_length=64)
     status: str = Field(default="active", max_length=16)
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
 
 
 class KnowledgeBaseRow(SQLModel, table=True):
@@ -95,9 +99,9 @@ class KnowledgeBaseRow(SQLModel, table=True):
     active_index_version_id: Optional[str] = Field(default=None, max_length=64)
     document_count: int = Field(default=0)
     chunk_count: int = Field(default=0)
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
-    deleted_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
+    deleted_at: Optional[datetime] = _utc_field(default=None, index=True)
 
 
 class KnowledgeDocumentRow(SQLModel, table=True):
@@ -113,7 +117,7 @@ class KnowledgeDocumentRow(SQLModel, table=True):
     size_bytes: int = Field(default=0, sa_column=Column(BigInteger))
     content_hash: str = Field(default="", index=True, max_length=128)
     etag: Optional[str] = Field(default=None, max_length=256)
-    last_modified: Optional[datetime] = Field(default=None)
+    last_modified: Optional[datetime] = _utc_field(default=None)
     language: Optional[str] = Field(default=None, max_length=32)
     tags: list = Field(default_factory=list, sa_column=Column(JSON))
     category: Optional[str] = Field(default=None, index=True, max_length=128)
@@ -121,15 +125,21 @@ class KnowledgeDocumentRow(SQLModel, table=True):
     custom_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     system_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     status: str = Field(default="indexed", index=True, max_length=32)
+    # SQL content and search-engine visibility are separate durability stages.
+    # Manual/local imports default to indexed; the production sync writer sets
+    # pending before dispatching the corresponding Elasticsearch batch.
+    search_index_status: str = Field(default="indexed", index=True, max_length=32)
+    search_index_error: Optional[str] = Field(default=None, sa_column=Column(Text))
+    search_index_attempts: int = Field(default=0)
     chunk_count: int = Field(default=0)
     error_code: Optional[str] = Field(default=None, max_length=128)
     error_message: Optional[str] = Field(default=None, sa_column=Column(Text))
-    indexed_at: Optional[datetime] = Field(default=None, index=True)
+    indexed_at: Optional[datetime] = _utc_field(default=None, index=True)
     created_by: str = Field(max_length=64)
     updated_by: Optional[str] = Field(default=None, max_length=64)
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
-    deleted_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
+    deleted_at: Optional[datetime] = _utc_field(default=None, index=True)
 
 
 class KnowledgeChunkRow(SQLModel, table=True):
@@ -148,12 +158,12 @@ class KnowledgeChunkRow(SQLModel, table=True):
     status: str = Field(default="active", index=True, max_length=32)
     embedding: list = Field(default_factory=list, sa_column=Column(JSON))
     embedding_ref: Optional[str] = Field(default=None, max_length=128)
-    indexed_at: Optional[datetime] = Field(default=None, index=True)
+    indexed_at: Optional[datetime] = _utc_field(default=None, index=True)
     disabled_by: Optional[str] = Field(default=None, max_length=64)
     disabled_reason: Optional[str] = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
-    deleted_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
+    deleted_at: Optional[datetime] = _utc_field(default=None, index=True)
 
 
 class KnowledgeDocumentContentRow(SQLModel, table=True):
@@ -173,7 +183,7 @@ class KnowledgeDocumentContentRow(SQLModel, table=True):
     # Over-long documents are stored capped at MAX_STORED_CONTENT_CHARS; this flags
     # that the persisted ``text`` is a prefix and deeper text lives only in chunks.
     truncated: bool = Field(default=False)
-    updated_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
 
 
 class KnowledgeIngestionJobRow(SQLModel, table=True):
@@ -190,11 +200,11 @@ class KnowledgeIngestionJobRow(SQLModel, table=True):
     succeeded_count: int = Field(default=0)
     failed_count: int = Field(default=0)
     skipped_count: int = Field(default=0)
-    started_at: Optional[datetime] = Field(default=None)
-    finished_at: Optional[datetime] = Field(default=None)
+    started_at: Optional[datetime] = _utc_field(default=None)
+    finished_at: Optional[datetime] = _utc_field(default=None)
     error_summary: Optional[str] = Field(default=None, sa_column=Column(Text))
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
 
 
 class BackgroundJobRow(SQLModel, table=True):
@@ -215,22 +225,26 @@ class BackgroundJobRow(SQLModel, table=True):
     # parked awaiting a human (HITL); an external event returns it to `queued`.
     status: str = Field(default="queued", index=True, max_length=32)
     payload: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    progress: dict = Field(default_factory=dict, sa_column=Column(JSON))
     result: Optional[dict] = Field(default=None, sa_column=Column(JSON))
     error: Optional[str] = Field(default=None, sa_column=Column(Text))
     attempts: int = Field(default=0)
     max_attempts: int = Field(default=3)
     # Earliest time the job may be claimed. NULL = immediately. A future scheduler
     # sets this for delayed / one-shot runs; retry/backoff also uses it.
-    run_after: Optional[datetime] = Field(default=None, index=True)
+    run_after: Optional[datetime] = _utc_field(default=None, index=True)
     priority: int = Field(default=0)                     # lower runs first
     worker_id: Optional[str] = Field(default=None, max_length=64)   # lease holder
-    claimed_at: Optional[datetime] = Field(default=None)
+    claimed_at: Optional[datetime] = _utc_field(default=None)
+    heartbeat_at: Optional[datetime] = _utc_field(default=None)
+    lease_expires_at: Optional[datetime] = _utc_field(default=None, index=True)
+    cancel_requested_at: Optional[datetime] = _utc_field(default=None)
     kb_id: Optional[str] = Field(default=None, index=True, max_length=64)
     created_by: Optional[str] = Field(default=None, index=True, max_length=64)
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
-    started_at: Optional[datetime] = Field(default=None)
-    finished_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
+    started_at: Optional[datetime] = _utc_field(default=None)
+    finished_at: Optional[datetime] = _utc_field(default=None)
 
 
 class AppConfigDocumentRow(SQLModel, table=True):
@@ -247,7 +261,7 @@ class AppConfigDocumentRow(SQLModel, table=True):
     revision: int = Field(default=1, index=True)
     checksum: str = Field(default="", max_length=128)
     updated_by: Optional[str] = Field(default=None, max_length=64)
-    updated_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
 
 
 class AppConfigRevisionRow(SQLModel, table=True):
@@ -261,7 +275,7 @@ class AppConfigRevisionRow(SQLModel, table=True):
     document_json: dict = Field(default_factory=dict, sa_column=Column(JSON))
     checksum: str = Field(default="", max_length=128)
     updated_by: Optional[str] = Field(default=None, max_length=64)
-    updated_at: datetime = Field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
 
 
 class KnowledgeDataSourceRow(SQLModel, table=True):
@@ -282,15 +296,16 @@ class KnowledgeDataSourceRow(SQLModel, table=True):
     # stored but not yet acted on (no scheduler in MVP)
     sync_schedule: Optional[str] = Field(default=None, max_length=128)
     status: str = Field(default="idle", index=True, max_length=32)
-    last_sync_at: Optional[datetime] = Field(default=None)
-    last_sync_finished_at: Optional[datetime] = Field(default=None)
+    active_job_id: Optional[str] = Field(default=None, index=True, max_length=64)
+    last_sync_at: Optional[datetime] = _utc_field(default=None)
+    last_sync_finished_at: Optional[datetime] = _utc_field(default=None)
     last_error: Optional[str] = Field(default=None, sa_column=Column(Text))
     doc_count: int = Field(default=0)
     last_sync_report: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_by: str = Field(max_length=64)
-    created_at: datetime = Field(default_factory=_now)
-    updated_at: datetime = Field(default_factory=_now)
-    deleted_at: Optional[datetime] = Field(default=None, index=True)
+    created_at: datetime = _utc_field(default_factory=_now)
+    updated_at: datetime = _utc_field(default_factory=_now)
+    deleted_at: Optional[datetime] = _utc_field(default=None, index=True)
 
 
 class KnowledgeIndexVersionRow(SQLModel, table=True):
@@ -310,6 +325,6 @@ class KnowledgeIndexVersionRow(SQLModel, table=True):
     chunk_count: int = Field(default=0)
     error_message: Optional[str] = Field(default=None, sa_column=Column(Text))
     created_by: str = Field(default="", max_length=64)
-    created_at: datetime = Field(default_factory=_now)
-    activated_at: Optional[datetime] = Field(default=None)
-    retired_at: Optional[datetime] = Field(default=None)
+    created_at: datetime = _utc_field(default_factory=_now)
+    activated_at: Optional[datetime] = _utc_field(default=None)
+    retired_at: Optional[datetime] = _utc_field(default=None)

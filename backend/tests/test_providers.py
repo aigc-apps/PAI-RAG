@@ -1,4 +1,7 @@
-import sys, os
+# ruff: noqa: E402
+import asyncio
+import os
+import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import pytest
 from app.providers import (
@@ -245,6 +248,32 @@ def test_get_embedder_builds_caches_and_type_checks():
     assert r.get_embedder("dashscope/text-embedding-v4") is emb  # cached
     with pytest.raises(ValueError, match="not an embedding model"):
         r.get_embedder("dashscope/chat")
+
+
+def test_provider_router_shares_embedding_concurrency_gate():
+    r = ProviderRouter(_typed_catalog(), embedding_concurrency=3)
+
+    emb = r.get_embedder("dashscope/text-embedding-v4")
+
+    assert emb._gate is r._embedding_gate
+    assert r._embedding_gate._value == 3
+
+
+def test_provider_router_closes_cached_async_clients():
+    class Closable:
+        def __init__(self):
+            self.closed = False
+
+        async def aclose(self):
+            self.closed = True
+
+    r = ProviderRouter(_typed_catalog())
+    client = Closable()
+    r._clients["custom"] = client
+
+    asyncio.run(r.aclose())
+
+    assert client.closed is True
 
 
 def test_get_reranker_builds_and_type_checks():

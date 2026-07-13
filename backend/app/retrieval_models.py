@@ -16,7 +16,8 @@ same embedder for that KB.
 
 from __future__ import annotations
 
-from typing import List, Optional, Protocol, Sequence, Tuple, runtime_checkable
+import asyncio
+from typing import Any, List, Optional, Protocol, Sequence, Tuple, runtime_checkable
 
 import httpx
 
@@ -52,6 +53,8 @@ class DashScopeEmbedder:
         dimension: int = 1024,
         batch_size: int = DASHSCOPE_EMBED_BATCH,
         timeout: float = DEFAULT_HTTP_TIMEOUT,
+        concurrency_gate: Optional[asyncio.Semaphore] = None,
+        client: Optional[Any] = None,
     ) -> None:
         self.base_url = base_url
         self.api_key = api_key
@@ -59,12 +62,27 @@ class DashScopeEmbedder:
         self.dimension = dimension
         self._batch = max(1, min(batch_size, DASHSCOPE_EMBED_BATCH))
         self._timeout = timeout
+        self._gate = concurrency_gate or asyncio.Semaphore(1)
+        self._client = client
+        self._owns_client = client is None
 
     def _headers(self) -> dict:
         return {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+
+    def _client_instance(self):
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._owns_client and self._client is not None:
+            close = getattr(self._client, "aclose", None)
+            if close is not None:
+                await close()
+        self._client = None
 
     async def embed(
         self, texts: Sequence[str], *, text_type: str = "document"
@@ -73,26 +91,34 @@ class DashScopeEmbedder:
         if not items:
             return []
         out: List[Optional[List[float]]] = [None] * len(items)
-        async with httpx.AsyncClient(timeout=self._timeout) as client:
-            for start in range(0, len(items), self._batch):
-                batch = items[start : start + self._batch]
-                payload = {
-                    "model": self.model,
-                    "input": {"texts": batch},
-                    "parameters": {
-                        "dimension": self.dimension,
-                        "text_type": text_type,
-                    },
-                }
-                resp = await client.post(
+
+        async def run_batch(start: int, batch: list[str]):
+            payload = {
+                "model": self.model,
+                "input": {"texts": batch},
+                "parameters": {
+                    "dimension": self.dimension,
+                    "text_type": text_type,
+                },
+            }
+            async with self._gate:
+                resp = await self._client_instance().post(
                     self.base_url, headers=self._headers(), json=payload
                 )
-                resp.raise_for_status()
-                data = resp.json()
-                embeddings = (data.get("output") or {}).get("embeddings") or []
-                for entry in embeddings:
-                    idx = int(entry.get("text_index", 0))
-                    out[start + idx] = entry.get("embedding") or []
+            resp.raise_for_status()
+            data = resp.json()
+            return start, (data.get("output") or {}).get("embeddings") or []
+
+        results = await asyncio.gather(
+            *(
+                run_batch(start, items[start : start + self._batch])
+                for start in range(0, len(items), self._batch)
+            )
+        )
+        for start, embeddings in results:
+            for entry in embeddings:
+                idx = int(entry.get("text_index", 0))
+                out[start + idx] = entry.get("embedding") or []
         missing = [i for i, v in enumerate(out) if v is None]
         if missing:
             raise RuntimeError(

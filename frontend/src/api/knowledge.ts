@@ -98,7 +98,23 @@ export interface KnowledgeDataSourceReport {
   errors?: { path?: string; error?: string }[];
 }
 
-export type DataSourceStatus = "idle" | "syncing" | "succeeded" | "partial" | "failed";
+export type DataSourceStatus = "idle" | "syncing" | "succeeded" | "partial" | "failed" | "cancelled";
+
+export interface KnowledgeSyncProgress {
+  phase: "discovering" | "fetching" | "embedding" | "persisting" | "indexing" | "finalizing" | "recovering" | "completed" | "partial" | "failed" | "cancelled";
+  total: number;
+  discovered: number;
+  fetched: number;
+  embedded: number;
+  persisted: number;
+  indexed: number;
+  unchanged: number;
+  deleted: number;
+  failed: number;
+  bytes_fetched: number;
+  docs_per_second: number;
+  estimated_seconds_remaining: number | null;
+}
 
 export interface KnowledgeDataSource {
   id: string;
@@ -109,6 +125,8 @@ export interface KnowledgeDataSource {
   source_config: Record<string, unknown>;
   enabled: boolean;
   status: DataSourceStatus;
+  active_job_id?: string | null;
+  sync_progress?: KnowledgeSyncProgress | null;
   doc_count: number;
   last_sync_at?: string | null;
   last_sync_finished_at?: string | null;
@@ -381,6 +399,14 @@ export async function syncDataSource(
 ): Promise<{ ok: boolean; status: string; data_source: KnowledgeDataSource }> {
   return parseJson<{ ok: boolean; status: string; data_source: KnowledgeDataSource }>(
     await apiFetch(`/v1/knowledge-bases/${kbId}/datasources/${dsId}/sync`, {
+      method: "POST",
+    })
+  );
+}
+
+export async function cancelDataSourceSync(kbId: string, dsId: string): Promise<void> {
+  await parseJson(
+    await apiFetch(`/v1/knowledge-bases/${kbId}/datasources/${dsId}/sync/cancel`, {
       method: "POST",
     })
   );

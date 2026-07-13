@@ -105,23 +105,29 @@ def pai_agent_wrapper(func):
             return await func(self, ctx, *args, **kwargs)
 
         async def traced():
-            with tracer.start_as_current_span("agent.run") as span:
+            from opentelemetry import context as otel_context, trace
+
+            span = tracer.start_span("agent.run")
+            token = otel_context.attach(trace.set_span_in_context(span))
+            try:
                 _set_input(span, self, ctx)
                 buf: list = []
-                # Runs inside the span context, so run()'s body sees our span as
-                # current and its @use_current_span keeps it current across the
-                # generator's async iteration below.
                 inner = await func(self, ctx, *args, **kwargs)
-                try:
-                    async for ev in inner:
-                        _capture_event(span, ev, buf)
-                        yield ev
-                except Exception as e:  # pragma: no cover - defensive
-                    span.record_exception(e)
-                    _set_error(span, str(e))
-                    raise
-                finally:
-                    _finish(span, buf)
+            finally:
+                # The generator may later be consumed by another asyncio
+                # Context, so the creation token must be detached before yield.
+                otel_context.detach(token)
+            try:
+                async for ev in inner:
+                    _capture_event(span, ev, buf)
+                    yield ev
+            except Exception as e:  # pragma: no cover - defensive
+                span.record_exception(e)
+                _set_error(span, str(e))
+                raise
+            finally:
+                _finish(span, buf)
+                span.end()
 
         return traced()
 

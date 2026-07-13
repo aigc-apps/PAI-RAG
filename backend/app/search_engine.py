@@ -20,6 +20,7 @@ Permission scoping is NOT done here — callers pass an already-authorized
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional, Protocol
@@ -44,6 +45,13 @@ class SearchHit:
     vector_score: float
     keyword_score: float
     metadata: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class BatchIndexResult:
+    indexed_document_ids: set[str]
+    failed_document_ids: set[str]
+    errors: dict[str, str]
 
 
 def matches_filters(doc: KnowledgeDocumentRow, filters: dict) -> bool:
@@ -229,6 +237,8 @@ class ElasticsearchEngine:
         verify_certs: bool = True,
         timeout: int = 30,
         client_factory: Optional[Callable[[], Any]] = None,
+        bulk_target_bytes: int = 5 * 1024 * 1024,
+        bulk_max_bytes: int = 10 * 1024 * 1024,
     ):
         self._url = url
         self._api_key = api_key
@@ -239,6 +249,8 @@ class ElasticsearchEngine:
         self._timeout = timeout
         self._client_factory = client_factory
         self._client: Any = None
+        self._bulk_target_bytes = max(256, bulk_target_bytes)
+        self._bulk_max_bytes = max(self._bulk_target_bytes, bulk_max_bytes)
 
     @classmethod
     def from_settings(cls, settings, client_factory=None) -> "ElasticsearchEngine":
@@ -251,10 +263,23 @@ class ElasticsearchEngine:
             verify_certs=settings.elasticsearch_verify_certs,
             timeout=settings.elasticsearch_timeout,
             client_factory=client_factory,
+            bulk_target_bytes=getattr(
+                settings, "sync_es_bulk_target_bytes", 5 * 1024 * 1024
+            ),
+            bulk_max_bytes=getattr(
+                settings, "sync_es_bulk_max_bytes", 10 * 1024 * 1024
+            ),
         )
 
     @classmethod
-    def from_vectordb_config(cls, cfg, client_factory=None) -> "ElasticsearchEngine":
+    def from_vectordb_config(
+        cls,
+        cfg,
+        client_factory=None,
+        *,
+        bulk_target_bytes: int = 5 * 1024 * 1024,
+        bulk_max_bytes: int = 10 * 1024 * 1024,
+    ) -> "ElasticsearchEngine":
         """Build from the global ``knowledgebase.vectordb`` config section
         (``app.agent_config.VectorDBConfig``). Secrets resolve inline first, then
         by env-var name (``*_env``), mirroring the search/sandbox providers."""
@@ -267,6 +292,8 @@ class ElasticsearchEngine:
             verify_certs=cfg.verify_certs,
             timeout=cfg.timeout,
             client_factory=client_factory,
+            bulk_target_bytes=bulk_target_bytes,
+            bulk_max_bytes=bulk_max_bytes,
         )
 
     # -- client / index helpers -------------------------------------------- #
@@ -331,34 +358,99 @@ class ElasticsearchEngine:
     async def index_chunks(self, kb, doc, chunks: list[dict]) -> None:
         """Replace this document's chunks in ES (delete-then-bulk), matching the
         SQL upsert semantics in ``import_text_document``."""
-        if not chunks:
-            await self.delete_document(kb.id, doc.id)
-            return
+        result = await self.index_document_batch(kb, [(doc, chunks)], refresh=True)
+        if result.failed_document_ids:
+            logger.warning(f"[es] bulk index had errors for doc {doc.id}")
+
+    async def index_document_batch(
+        self,
+        kb,
+        documents: list[tuple[Any, list[dict]]],
+        *,
+        refresh: bool = False,
+    ) -> BatchIndexResult:
+        """Replace several documents with one delete and size-bounded bulks."""
+        if not documents:
+            return BatchIndexResult(set(), set(), {})
         await self.ensure_index(kb)
         idx = self._index(kb.id)
         client = self.client()
-        await self.delete_document(kb.id, doc.id)
-        ops: list[dict] = []
-        for c in chunks:
-            ops.append({"index": {"_index": idx, "_id": c["chunk_id"]}})
-            ops.append({
-                "kb_id": kb.id,
-                "document_id": doc.id,
-                "chunk_id": c["chunk_id"],
-                "chunk_index": c.get("chunk_index", 0),
-                "text": c.get("text", ""),
-                "title": doc.title or "",
-                "heading": " > ".join(c.get("heading_path") or []),
-                "source_uri": doc.uri or "",
-                "source_type": doc.source_type or "",
-                "category": doc.category,
-                "tags": doc.tags or [],
-                "status": "active",
-                "embedding": c.get("embedding") or [],
-            })
-        resp = await client.bulk(operations=ops, refresh=True)
-        if isinstance(resp, dict) and resp.get("errors"):
-            logger.warning(f"[es] bulk index had errors for doc {doc.id}")
+        document_ids = [doc.id for doc, _ in documents]
+        await self.delete_document_batch(kb.id, document_ids, refresh=refresh)
+
+        batches: list[list[dict]] = []
+        current: list[dict] = []
+        current_bytes = 0
+        errors: dict[str, str] = {}
+        chunk_documents: dict[str, str] = {}
+        for doc, chunks in documents:
+            for chunk in chunks:
+                action = {"index": {"_index": idx, "_id": chunk["chunk_id"]}}
+                source = {
+                    "kb_id": kb.id,
+                    "document_id": doc.id,
+                    "chunk_id": chunk["chunk_id"],
+                    "chunk_index": chunk.get("chunk_index", 0),
+                    "text": chunk.get("text", ""),
+                    "title": doc.title or "",
+                    "heading": " > ".join(chunk.get("heading_path") or []),
+                    "source_uri": doc.uri or "",
+                    "source_type": doc.source_type or "",
+                    "category": doc.category,
+                    "tags": doc.tags or [],
+                    "status": "active",
+                    "embedding": chunk.get("embedding") or [],
+                }
+                pair_bytes = len(
+                    json.dumps([action, source], ensure_ascii=False, separators=(",", ":")).encode()
+                )
+                if pair_bytes > self._bulk_max_bytes:
+                    errors[doc.id] = (
+                        f"chunk {chunk['chunk_id']} exceeds Elasticsearch bulk byte limit"
+                    )
+                    continue
+                if current and current_bytes + pair_bytes > self._bulk_target_bytes:
+                    batches.append(current)
+                    current = []
+                    current_bytes = 0
+                current.extend([action, source])
+                current_bytes += pair_bytes
+                chunk_documents[chunk["chunk_id"]] = doc.id
+        if current:
+            batches.append(current)
+
+        failed = set(errors)
+        for operations in batches:
+            response = await client.bulk(operations=operations, refresh=refresh)
+            body = response.body if hasattr(response, "body") else response
+            if not isinstance(body, dict) or not body.get("errors"):
+                continue
+            for item in body.get("items") or []:
+                detail = next(iter(item.values()), {})
+                if not detail.get("error"):
+                    continue
+                document_id = chunk_documents.get(str(detail.get("_id")))
+                if document_id:
+                    failed.add(document_id)
+                    errors[document_id] = str(detail["error"])[:500]
+
+        return BatchIndexResult(set(document_ids) - failed, failed, errors)
+
+    async def delete_document_batch(
+        self, kb_id: str, document_ids: list[str], *, refresh: bool = False
+    ) -> None:
+        if not document_ids:
+            return
+        await self.client().delete_by_query(
+            index=self._index(kb_id),
+            query={"terms": {"document_id": document_ids}},
+            conflicts="proceed",
+            ignore_unavailable=True,
+            refresh=refresh,
+        )
+
+    async def refresh_kb(self, kb_id: str) -> None:
+        await self.client().indices.refresh(index=self._index(kb_id))
 
     async def delete_document(self, kb_id: str, document_id: str) -> None:
         await self.client().delete_by_query(
@@ -465,7 +557,15 @@ def build_search_engine(settings, sql_engine, *, vectordb=None) -> SearchEngine:
     if vectordb is not None:
         if vectordb.engine == "elasticsearch" and vectordb.url:
             logger.info(f"[search] primary engine = elasticsearch ({vectordb.url})")
-            return ElasticsearchEngine.from_vectordb_config(vectordb)
+            return ElasticsearchEngine.from_vectordb_config(
+                vectordb,
+                bulk_target_bytes=getattr(
+                    settings, "sync_es_bulk_target_bytes", 5 * 1024 * 1024
+                ),
+                bulk_max_bytes=getattr(
+                    settings, "sync_es_bulk_max_bytes", 10 * 1024 * 1024
+                ),
+            )
         if vectordb.engine == "elasticsearch":
             logger.warning("[search] knowledgebase.vectordb.engine=elasticsearch but url is empty; using local")
         return local

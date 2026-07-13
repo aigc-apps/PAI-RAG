@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column('content_hash', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=False),
         sa.Column('char_len', sa.Integer(), nullable=False),
         sa.Column('truncated', sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('document_id'),
     )
     with op.batch_alter_table('knowledge_document_contents', schema=None) as batch_op:

@@ -1,7 +1,7 @@
 """baseline schema
 
 Revision ID: 6ccd93a32c2e
-Revises: 
+Revises:
 Create Date: 2026-07-09 01:24:32.771923+00:00
 """
 from typing import Sequence, Union
@@ -29,7 +29,7 @@ def upgrade() -> None:
     sa.Column('content', sa.JSON(), nullable=True),
     sa.Column('response_id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
     sa.Column('user_id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('conversation_items', schema=None) as batch_op:
@@ -40,8 +40,8 @@ def upgrade() -> None:
     op.create_table('conversations',
     sa.Column('id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=False),
     sa.Column('user_id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('title', sqlmodel.sql.sqltypes.AutoString(length=200), nullable=True),
     sa.Column('last_response_id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
     sa.Column('summary', sa.Text(), nullable=True),
@@ -68,9 +68,9 @@ def upgrade() -> None:
     sa.Column('active_index_version_id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
     sa.Column('document_count', sa.Integer(), nullable=False),
     sa.Column('chunk_count', sa.Integer(), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('knowledge_bases', schema=None) as batch_op:
@@ -93,12 +93,12 @@ def upgrade() -> None:
     sa.Column('status', sqlmodel.sql.sqltypes.AutoString(length=32), nullable=False),
     sa.Column('embedding', sa.JSON(), nullable=True),
     sa.Column('embedding_ref', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=True),
-    sa.Column('indexed_at', sa.DateTime(), nullable=True),
+    sa.Column('indexed_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('disabled_by', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
     sa.Column('disabled_reason', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('knowledge_chunks', schema=None) as batch_op:
@@ -118,15 +118,15 @@ def upgrade() -> None:
     sa.Column('enabled', sa.Boolean(), nullable=False),
     sa.Column('sync_schedule', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=True),
     sa.Column('status', sqlmodel.sql.sqltypes.AutoString(length=32), nullable=False),
-    sa.Column('last_sync_at', sa.DateTime(), nullable=True),
-    sa.Column('last_sync_finished_at', sa.DateTime(), nullable=True),
+    sa.Column('last_sync_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('last_sync_finished_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('last_error', sa.Text(), nullable=True),
     sa.Column('doc_count', sa.Integer(), nullable=False),
     sa.Column('last_sync_report', sa.JSON(), nullable=True),
     sa.Column('created_by', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('knowledge_data_sources', schema=None) as batch_op:
@@ -148,7 +148,7 @@ def upgrade() -> None:
     sa.Column('size_bytes', sa.BigInteger(), nullable=True),
     sa.Column('content_hash', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=False),
     sa.Column('etag', sqlmodel.sql.sqltypes.AutoString(length=256), nullable=True),
-    sa.Column('last_modified', sa.DateTime(), nullable=True),
+    sa.Column('last_modified', sa.DateTime(timezone=True), nullable=True),
     sa.Column('language', sqlmodel.sql.sqltypes.AutoString(length=32), nullable=True),
     sa.Column('tags', sa.JSON(), nullable=True),
     sa.Column('category', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=True),
@@ -159,12 +159,12 @@ def upgrade() -> None:
     sa.Column('chunk_count', sa.Integer(), nullable=False),
     sa.Column('error_code', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=True),
     sa.Column('error_message', sa.Text(), nullable=True),
-    sa.Column('indexed_at', sa.DateTime(), nullable=True),
+    sa.Column('indexed_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('created_by', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=False),
     sa.Column('updated_by', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
-    sa.Column('deleted_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('knowledge_documents', schema=None) as batch_op:
@@ -193,9 +193,9 @@ def upgrade() -> None:
     sa.Column('chunk_count', sa.Integer(), nullable=False),
     sa.Column('error_message', sa.Text(), nullable=True),
     sa.Column('created_by', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('activated_at', sa.DateTime(), nullable=True),
-    sa.Column('retired_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('activated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('retired_at', sa.DateTime(timezone=True), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('knowledge_index_versions', schema=None) as batch_op:
@@ -215,11 +215,11 @@ def upgrade() -> None:
     sa.Column('succeeded_count', sa.Integer(), nullable=False),
     sa.Column('failed_count', sa.Integer(), nullable=False),
     sa.Column('skipped_count', sa.Integer(), nullable=False),
-    sa.Column('started_at', sa.DateTime(), nullable=True),
-    sa.Column('finished_at', sa.DateTime(), nullable=True),
+    sa.Column('started_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('finished_at', sa.DateTime(timezone=True), nullable=True),
     sa.Column('error_summary', sa.Text(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('knowledge_ingestion_jobs', schema=None) as batch_op:
@@ -235,8 +235,8 @@ def upgrade() -> None:
     sa.Column('kind', sqlmodel.sql.sqltypes.AutoString(length=32), nullable=False),
     sa.Column('source_response_id', sqlmodel.sql.sqltypes.AutoString(length=64), nullable=True),
     sa.Column('status', sqlmodel.sql.sqltypes.AutoString(length=16), nullable=False),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
-    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
     with op.batch_alter_table('memory_items', schema=None) as batch_op:
@@ -250,7 +250,7 @@ def upgrade() -> None:
     sa.Column('status', sqlmodel.sql.sqltypes.AutoString(length=32), nullable=False),
     sa.Column('usage', sa.JSON(), nullable=True),
     sa.Column('error', sa.JSON(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('metadata', sa.JSON(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )
@@ -266,8 +266,8 @@ def upgrade() -> None:
     sa.Column('role', sqlmodel.sql.sqltypes.AutoString(length=16), nullable=False),
     sa.Column('status', sqlmodel.sql.sqltypes.AutoString(length=16), nullable=False),
     sa.Column('invite_token_hash', sqlmodel.sql.sqltypes.AutoString(length=128), nullable=True),
-    sa.Column('invite_expires_at', sa.DateTime(), nullable=True),
-    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('invite_expires_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('metadata', sa.JSON(), nullable=True),
     sa.PrimaryKeyConstraint('id')
     )

@@ -1,3 +1,4 @@
+# ruff: noqa: E401, E402
 """Tiered context management: offload-not-truncate + read_handle recovery.
 
 The budget compressor must replace an over-budget tool result with a compact
@@ -80,7 +81,9 @@ def test_fit_to_budget_offloads_older_rounds_losslessly():
     # tool round + system stay protected.) A far tinier budget would push on to L2
     # summarization/L3 drop, which is a separate, lossier tier.
     mgr.min_protected_history_rounds = 0
-    mgr.token_budget = 1500
+    # Character-only estimation is intentionally more conservative than the old
+    # tokenizer fallback; this threshold keeps the scenario in the L1-only tier.
+    mgr.token_budget = 2000
     mgr.run_bodies = {}
     bodies = {f"call_{i}": ("row " * 800 + f"#{i}") for i in range(3)}
     messages = [{"role": "system", "content": "sys"}]

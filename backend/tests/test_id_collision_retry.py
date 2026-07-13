@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """End-to-end proof that a PK collision on a KB write is recovered by the
 `with_id_retry` wrapper (and that exhausting the retries surfaces the error).
 
@@ -110,11 +111,11 @@ def test_import_text_document_raises_when_collisions_never_clear(monkeypatch):
                 await s.exec(select(KnowledgeChunkRow.id).where(KnowledgeChunkRow.document_id == doc0.id))
             ).first()
 
-        # Always return the same duplicate chunk id → every attempt collides.
-        def always_dup(p: str) -> str:
-            return existing_chk if p == "chk" else new_id(p)
-
-        monkeypatch.setattr(knowledge_mod, "_uuid", always_dup)
+        # Force the deterministic chunk-id builder onto an existing row → every
+        # transaction retry sees the same collision and must eventually surface it.
+        monkeypatch.setattr(
+            knowledge_mod, "_chunk_id", lambda *_args, **_kwargs: existing_chk
+        )
 
         from sqlalchemy.exc import IntegrityError
 

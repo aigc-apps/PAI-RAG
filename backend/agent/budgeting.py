@@ -1,7 +1,6 @@
 from typing import List
 from dataclasses import dataclass, field
 from loguru import logger
-from memory.utils import estimate_tokens_in_text, truncate, get_tokenizer
 from common.llm.models import DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
 from agent.tool_result_truncation import smart_truncate
 from agent.context_offload import is_placeholder, make_placeholder
@@ -15,32 +14,22 @@ DEFAULT_TRUNCATED_TOOL_RESULT_TOKENS = 200
 DEFAULT_MIN_PROTECTED_HISTORY_ROUNDS = 5
 DEFAULT_HISTORY_MSG_MAX_TOKENS = 1500
 MESSAGE_OVERHEAD_TOKENS = 4
-# ~4 chars/token heuristic used when no tokenizer is available (lean mode).
-CHARS_PER_TOKEN = 4
-
-# --- Cheap, script-aware token approximation for the budget fast-path ---------
-# BPE compresses Latin prose to ~5 chars/token but CJK to ~1.5, so a single
+# --- Script-aware character approximation ------------------------------------
+# Latin prose and CJK have different character/token ratios, so a single
 # chars/N constant is unsafe on mixed CN/EN text — it under-counts Chinese ~2.5×,
 # the dangerous direction for a budget guard. We split the two scripts: the CJK
 # char count is derived from the UTF-8 byte/char delta (a 3-byte CJK char adds +2
 # bytes over its 1 char), so the whole estimate is C-level len()/encode() with no
 # Python char loop (~600× cheaper than tokenizing a full context). Divisors sit
 # BELOW the measured chars/token so the estimate biases high: an "under budget"
-# verdict is trustworthy, and the exact tokenizer only runs when this lands near
-# the limit. Calibrate against your own corpus with the real tokenizer offline.
+# estimate is unsafe on mixed text. These divisors intentionally bias high.
 CJK_CHARS_PER_TOKEN = 1.5
 OTHER_CHARS_PER_TOKEN = 2.5
-# Skip exact tokenization while the cheap over-estimate is under this fraction of
-# the budget; the margin absorbs the estimator's slack on dense JSON/code.
 BUDGET_GATE_RATIO = 0.8
 
 
 def approx_tokens(text: str) -> int:
-    """Fast, conservative (over-counting) token estimate for the budget gate.
-
-    Not exact — never use it to *bill* or to make the final truncation cut; it is
-    only the "am I comfortably under budget?" pre-check that lets the common,
-    well-under-budget turn skip the exact tokenizer entirely (see notes above)."""
+    """Fast, conservative token estimate based only on character composition."""
     if not text:
         return 0
     n_chars = len(text)
@@ -50,21 +39,18 @@ def approx_tokens(text: str) -> int:
     return int(cjk / CJK_CHARS_PER_TOKEN + other / OTHER_CHARS_PER_TOKEN)
 
 
-def _estimate_tokens(text: str, tokenizer) -> int:
-    if not text:
-        return 0
-    if tokenizer is None:
-        return max(1, len(text) // CHARS_PER_TOKEN)
-    return estimate_tokens_in_text(text, tokenizer=tokenizer)
+def _estimate_tokens(text: str) -> int:
+    return approx_tokens(text)
 
 
-def _truncate(text: str, max_token: int, tokenizer):
-    """Tokenizer-aware truncate with a char-based fallback when tokenizer is None.
-    Returns (truncated_text, new_token_count) like memory.utils.truncate."""
-    if tokenizer is None:
-        truncated = text[: max_token * CHARS_PER_TOKEN]
-        return truncated, _estimate_tokens(truncated, None)
-    return truncate(text, max_token=max_token, tokenizer=tokenizer)
+def _truncate(text: str, max_token: int):
+    if _estimate_tokens(text) <= max_token:
+        return text, _estimate_tokens(text)
+    ratio = max_token / max(_estimate_tokens(text), 1)
+    truncated = text[: max(1, int(len(text) * ratio))]
+    while truncated and _estimate_tokens(truncated) > max_token:
+        truncated = truncated[:-1]
+    return truncated, _estimate_tokens(truncated)
 
 
 @dataclass
@@ -99,11 +85,6 @@ class AgentMessageManager:
         self.token_budget = int(
             context_window - max_output_tokens - context_window * reserve_ratio
         )
-        try:
-            self.tokenizer = get_tokenizer()
-        except Exception:
-            logger.info("Tokenizer unavailable; using length-based token estimate.")
-            self.tokenizer = None
         # Per-manager (i.e. per-turn — one manager is built per request) cache of
         # exact per-message counts. fit() re-runs on every agent step but history
         # messages are immutable, so without this a turn tokenizes the whole history
@@ -157,15 +138,15 @@ class AgentMessageManager:
         tokens = MESSAGE_OVERHEAD_TOKENS
         content = msg.get("content") or ""
         if isinstance(content, str):
-            tokens += _estimate_tokens(content, self.tokenizer)
+            tokens += _estimate_tokens(content)
         elif isinstance(content, list):
             for item in content:
                 if isinstance(item, dict) and item.get("type") == "text":
-                    tokens += _estimate_tokens(item.get("text", ""), self.tokenizer)
+                    tokens += _estimate_tokens(item.get("text", ""))
         tool_calls = msg.get("tool_calls")
         if tool_calls:
             for tc in tool_calls:
-                tokens += _estimate_tokens(str(tc), self.tokenizer)
+                tokens += _estimate_tokens(str(tc))
         return tokens
 
     def estimate_messages_tokens(self, messages: List[dict]) -> int:
@@ -186,20 +167,20 @@ class AgentMessageManager:
             return content
         # A token spans >= 1 character, so token_count <= len(content). When the raw
         # length is already under the cap the result provably fits — skip the
-        # tokenizer. This is the common case for ordinary (small) tool outputs.
+        # estimator. This is the common case for ordinary (small) tool outputs.
         if len(content) <= self.max_tool_result_tokens:
             return content
-        tokens = _estimate_tokens(content, self.tokenizer)
+        tokens = _estimate_tokens(content)
         if tokens <= self.max_tool_result_tokens:
             return content
         # Structural truncation: keep head+tail and JSON shape instead of the
         # head-only cut, so the model still sees how the result ended.
         truncated_text = smart_truncate(
-            content, self.max_tool_result_tokens, self.tokenizer
+            content, self.max_tool_result_tokens
         )
         logger.info(
             f"Tool result truncated from {tokens} to "
-            f"~{_estimate_tokens(truncated_text, self.tokenizer)} tokens (structural)"
+            f"~{_estimate_tokens(truncated_text)} tokens (structural)"
         )
         return truncated_text
 
@@ -312,7 +293,7 @@ class AgentMessageManager:
             content = msg.get("content") or ""
             if not content or is_placeholder(content):
                 continue
-            current_tokens = _estimate_tokens(content, self.tokenizer)
+            current_tokens = _estimate_tokens(content)
             if current_tokens <= target_tokens:
                 continue
             # Offload-not-truncate: keep the full body recoverable (stashed for this
@@ -325,7 +306,7 @@ class AgentMessageManager:
                 self.run_bodies[call_id] = content
             placeholder = make_placeholder(call_id, content, current_tokens)
             msg["content"] = placeholder
-            new_tokens = _estimate_tokens(placeholder, self.tokenizer)
+            new_tokens = _estimate_tokens(placeholder)
             saved += current_tokens - new_tokens
         group.tokens -= saved
         return saved
@@ -391,11 +372,6 @@ class AgentMessageManager:
         return saved
 
     def fit_to_budget(self, messages: List[dict]) -> List[dict]:
-        # Fast path: a cheap, script-aware over-estimate. When it's comfortably under
-        # budget — the overwhelming common case — skip exact tokenization entirely.
-        # fit() runs on every agent step, and the exact pass is a synchronous,
-        # event-loop-blocking cost that scales with the whole context; the gate keeps
-        # it off the loop except for turns genuinely approaching the window.
         if self.approx_messages_tokens(messages) < BUDGET_GATE_RATIO * self.token_budget:
             return messages
         total_tokens = self.estimate_messages_tokens(messages)
@@ -465,11 +441,11 @@ class AgentMessageManager:
         content = msg.get("content") or ""
         if not isinstance(content, str) or not content:
             return 0
-        current_tokens = _estimate_tokens(content, self.tokenizer)
+        current_tokens = _estimate_tokens(content)
         if current_tokens <= max_tokens:
             return 0
         truncated_text, new_tokens = _truncate(
-            content, max_token=max_tokens, tokenizer=self.tokenizer
+            content, max_token=max_tokens
         )
         msg["content"] = truncated_text + TOOL_RESULT_TRUNCATED_MARKER
         return current_tokens - new_tokens

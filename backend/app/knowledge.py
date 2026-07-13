@@ -17,7 +17,16 @@ from app.datasource.registry import get_adapter, supported_source_types
 from app.datasource.schema import SourceDocument
 from app.retrieval_models import build_embedder
 from app.search_engine import LocalSearchEngine, SearchHit
+from app.sync_pipeline import (
+    EmbeddedDocument,
+    FetchedDocument,
+    PersistedBatch,
+    PipelineLimits,
+    PreparedDocument,
+    SyncPipeline,
+)
 from app.models import (
+    BackgroundJobRow,
     KnowledgeBaseRow,
     KnowledgeChunkRow,
     KnowledgeDataSourceRow,
@@ -67,6 +76,16 @@ SYNC_FETCH_CONCURRENCY = 6
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _chunk_id(
+    index_version_id: Optional[str],
+    document_id: str,
+    chunk_index: int,
+    text_hash: str,
+) -> str:
+    material = f"{index_version_id or 'none'}\0{document_id}\0{chunk_index}\0{text_hash}"
+    return "chk_" + hashlib.sha256(material.encode("utf-8")).hexdigest()[:24]
 
 
 def _slugify(text: str) -> str:
@@ -248,7 +267,14 @@ def _merge(defaults: dict, override: Optional[dict]) -> dict:
 
 
 class KnowledgeService:
-    def __init__(self, engine, search_engine=None, fallback_to_local: bool = True, router=None):
+    def __init__(
+        self,
+        engine,
+        search_engine=None,
+        fallback_to_local: bool = True,
+        router=None,
+        pipeline_limits: Optional[PipelineLimits] = None,
+    ):
         self._engine = engine
         # The local SQL scan is always available as a degradation target. The
         # primary engine (ES when configured) serves queries and receives the
@@ -261,6 +287,54 @@ class KnowledgeService:
         # Optional: without it every KB embeds with the local hash (old behaviour),
         # keeping offline/test paths network-free.
         self._router = router
+        self._pipeline_limits = pipeline_limits or PipelineLimits(
+            fetch_concurrency=SYNC_FETCH_CONCURRENCY
+        )
+        self._sync_enqueue_lock = asyncio.Lock()
+
+    async def enqueue_data_source_sync(self, queue, kb_id: str, ds_id: str, *, user: User):
+        """Atomically reserve the data source and create its durable queue row."""
+        job = queue.build_job(
+            kind="kb_sync",
+            kb_id=kb_id,
+            created_by=user.id,
+            payload={
+                "kb_id": kb_id,
+                "ds_id": ds_id,
+                "user_id": user.id,
+                "user_email": user.email,
+                "user_role": user.role,
+            },
+        )
+        async with self._sync_enqueue_lock:
+            async with AsyncSession(self._engine, expire_on_commit=False) as s:
+                kb = await s.get(KnowledgeBaseRow, kb_id)
+                if kb is None or kb.deleted_at is not None or not self.can_manage(kb, user):
+                    raise PermissionError("knowledge base edit permission required")
+                stmt = select(KnowledgeDataSourceRow).where(
+                    KnowledgeDataSourceRow.id == ds_id,
+                    KnowledgeDataSourceRow.kb_id == kb_id,
+                    KnowledgeDataSourceRow.deleted_at.is_(None),
+                )
+                if self._engine.dialect.name == "postgresql":
+                    stmt = stmt.with_for_update()
+                ds = (await s.exec(stmt)).first()
+                if ds is None:
+                    raise PermissionError("data source not found")
+                if not ds.enabled:
+                    raise ValueError("data source is disabled")
+                if ds.active_job_id:
+                    raise RuntimeError("a sync is already in progress")
+                ds.active_job_id = job.id
+                ds.status = "syncing"
+                ds.last_sync_at = now_utc()
+                ds.last_error = None
+                ds.updated_at = now_utc()
+                s.add(ds)
+                s.add(job)
+                await s.commit()
+        queue.notify()
+        return job.id, ds
 
     def set_search_engine(self, search_engine, *, fallback_to_local: bool = True) -> None:
         """Swap the primary search engine at runtime (keeps the local fallback).
@@ -691,8 +765,10 @@ class KnowledgeService:
                 for idx, ch in enumerate(chunks):
                     body = ch["text"]
                     heading_path = ch.get("heading_path") or []
-                    chunk_id = _uuid("chk")
                     chunk_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    chunk_id = _chunk_id(
+                        active_index_version_id, doc_id, idx, chunk_hash
+                    )
                     embedding = chunk_vectors[idx] if idx < len(chunk_vectors) else []
                     s.add(
                         KnowledgeChunkRow(
@@ -766,11 +842,30 @@ class KnowledgeService:
     async def _delete_from_engine_best_effort(self, kb_id: str, document_ids: list[str]) -> None:
         if self._search is self._local or not document_ids:
             return
-        for doc_id in document_ids:
-            try:
-                await self._search.delete_document(kb_id, doc_id)
-            except Exception as ex:
-                logger.warning(f"[search] delete_document failed for {doc_id}: {ex!r}")
+        try:
+            delete_batch = getattr(self._search, "delete_document_batch", None)
+            if delete_batch is not None:
+                await delete_batch(kb_id, document_ids, refresh=False)
+            else:
+                for doc_id in document_ids:
+                    await self._search.delete_document(kb_id, doc_id)
+            async with AsyncSession(self._engine) as s:
+                rows = (
+                    await s.exec(
+                        select(KnowledgeDocumentRow).where(
+                            KnowledgeDocumentRow.id.in_(document_ids)
+                        )
+                    )
+                ).all()
+                for row in rows:
+                    row.search_index_status = "deleted"
+                    row.search_index_error = None
+                    s.add(row)
+                await s.commit()
+        except Exception as ex:
+            logger.warning(
+                f"[search] batch document deletion failed for {len(document_ids)} docs: {ex!r}"
+            )
 
     async def _refresh_counts(self, s: AsyncSession, kb: KnowledgeBaseRow) -> None:
         doc_count = (
@@ -1411,6 +1506,39 @@ class KnowledgeService:
                 raise PermissionError("data source not found")
             return ds
 
+    async def data_source_payload(self, row: KnowledgeDataSourceRow) -> dict:
+        data = row.model_dump(mode="json")
+        if not row.active_job_id:
+            data["sync_job"] = None
+            data["sync_progress"] = None
+            return data
+        async with AsyncSession(self._engine) as s:
+            job = await s.get(BackgroundJobRow, row.active_job_id)
+        data["sync_job"] = (
+            None
+            if job is None
+            else {
+                "id": job.id,
+                "status": job.status,
+                "progress": dict(job.progress or {}),
+                "cancel_requested": job.cancel_requested_at is not None,
+                "error": job.error,
+            }
+        )
+        data["sync_progress"] = dict(job.progress or {}) if job is not None else None
+        return data
+
+    async def cancel_data_source_sync(
+        self, queue, kb_id: str, ds_id: str, *, user: User
+    ) -> str:
+        await self.get_kb(kb_id, user=user, require_manage=True)
+        row = await self.get_data_source(kb_id, ds_id, user=user)
+        if not row.active_job_id:
+            raise RuntimeError("no sync is currently active")
+        if not await queue.request_cancel(row.active_job_id):
+            raise RuntimeError("sync is already terminal")
+        return row.active_job_id
+
     async def update_data_source(
         self, kb_id: str, ds_id: str, *, user: User, patch: dict
     ) -> KnowledgeDataSourceRow:
@@ -1466,13 +1594,358 @@ class KnowledgeService:
             "fetched_at": sd.fetched_at,
         }
 
-    async def sync_data_source(self, kb_id: str, ds_id: str, *, user: User) -> KnowledgeDataSourceRow:
+    async def _prepare_synced_document(
+        self,
+        kb: KnowledgeBaseRow,
+        ds: KnowledgeDataSourceRow,
+        source_key: str,
+        adapter,
+        existing_by_uri: dict[str, KnowledgeDocumentRow],
+        fetched: FetchedDocument,
+    ) -> PreparedDocument:
+        sd = adapter.emit(fetched.source, fetched.body)
+        uri = sd.source_url or sd.doc_id
+        previous = existing_by_uri.get(uri)
+        unchanged = bool(
+            previous is not None
+            and previous.content_hash == sd.content_hash
+            and previous.status == "indexed"
+            and previous.search_index_status == "indexed"
+        )
+        parser = _merge(DEFAULT_PARSER_CONFIG, kb.default_parser_config)
+        chunks = [] if unchanged else split_document(
+            sd.content,
+            mime_type="text/markdown",
+            chunk_size=int(parser.get("chunk_size") or 1000),
+            chunk_overlap=int(parser.get("chunk_overlap") or 150),
+        )
+        stored_full = sd.content.strip()
+        return PreparedDocument(
+            source=sd,
+            content=sd.content,
+            chunks=chunks,
+            unchanged=unchanged,
+            metadata={
+                "uri": uri,
+                "title": sd.title,
+                "source_type": ds.source_type,
+                "source_id": ds.id,
+                "description": sd.summary or "",
+                "tags": [sd.section] if sd.section else [],
+                "category": sd.product,
+                "custom_metadata": self._synced_doc_metadata(ds.id, source_key, sd),
+                "content_hash": sd.content_hash,
+                "size_bytes": sd.byte_size,
+                "stored_text": stored_full[:MAX_STORED_CONTENT_CHARS],
+                "stored_truncated": len(stored_full) > MAX_STORED_CONTENT_CHARS,
+                "was_existing": previous is not None,
+            },
+        )
+
+    async def _embed_synced_documents(
+        self, kb: KnowledgeBaseRow, documents: list[PreparedDocument]
+    ) -> list[EmbeddedDocument]:
+        positions: list[tuple[int, int]] = []
+        inputs: list[str] = []
+        for doc_index, document in enumerate(documents):
+            title = document.metadata["title"]
+            for chunk_index, chunk in enumerate(document.chunks):
+                positions.append((doc_index, chunk_index))
+                inputs.append(
+                    _embed_input(title, chunk.get("heading_path") or [], chunk["text"])
+                )
+        embedder = build_embedder(kb.embedding_config, self._router)
+        vectors = await embedder.embed(inputs, text_type="document") if inputs else []
+        if len(vectors) != len(positions):
+            raise RuntimeError(
+                f"embedding vector count mismatch: {len(vectors)} != {len(positions)}"
+            )
+        grouped: list[list[list[float]]] = [[] for _ in documents]
+        for (doc_index, _chunk_index), vector in zip(positions, vectors):
+            grouped[doc_index].append(vector)
+        return [
+            EmbeddedDocument(document, grouped[index])
+            for index, document in enumerate(documents)
+        ]
+
+    async def _persist_synced_batch(
+        self,
+        kb_id: str,
+        user: User,
+        documents: list[EmbeddedDocument],
+    ) -> PersistedBatch:
+        uris = [document.prepared.metadata["uri"] for document in documents]
+        async with AsyncSession(self._engine, expire_on_commit=False) as s:
+            kb = await s.get(KnowledgeBaseRow, kb_id)
+            if kb is None or kb.deleted_at is not None:
+                raise PermissionError("knowledge base edit permission required")
+            existing_rows = (
+                await s.exec(
+                    select(KnowledgeDocumentRow).where(
+                        KnowledgeDocumentRow.kb_id == kb_id,
+                        KnowledgeDocumentRow.uri.in_(uris),
+                        KnowledgeDocumentRow.deleted_at.is_(None),
+                    )
+                )
+            ).all()
+            existing_by_uri = {row.uri: row for row in existing_rows}
+            ids_by_uri = {
+                uri: existing_by_uri[uri].id if uri in existing_by_uri else _uuid("doc")
+                for uri in uris
+            }
+            document_ids = list(ids_by_uri.values())
+            await s.exec(
+                delete(KnowledgeChunkRow).where(
+                    KnowledgeChunkRow.document_id.in_(document_ids)
+                )
+            )
+            await s.exec(
+                delete(KnowledgeDocumentContentRow).where(
+                    KnowledgeDocumentContentRow.document_id.in_(document_ids)
+                )
+            )
+            indexed_at = now_utc()
+            persisted_docs: list[KnowledgeDocumentRow] = []
+            es_documents: list[tuple[KnowledgeDocumentRow, list[dict]]] = []
+            for embedded in documents:
+                prepared = embedded.prepared
+                meta = prepared.metadata
+                uri = meta["uri"]
+                doc_id = ids_by_uri[uri]
+                doc = existing_by_uri.get(uri) or KnowledgeDocumentRow(
+                    id=doc_id,
+                    kb_id=kb_id,
+                    uri=uri,
+                    source_type=meta["source_type"],
+                    title=meta["title"],
+                    created_by=user.id,
+                )
+                doc.source_id = meta["source_id"]
+                doc.source_type = meta["source_type"]
+                doc.title = meta["title"]
+                doc.description = meta["description"]
+                doc.mime_type = "text/markdown"
+                doc.size_bytes = meta["size_bytes"]
+                doc.content_hash = meta["content_hash"]
+                doc.tags = meta["tags"]
+                doc.category = meta["category"]
+                doc.custom_metadata = meta["custom_metadata"]
+                doc.system_metadata = {"content_preview": prepared.content[:500]}
+                doc.status = "indexed"
+                doc.search_index_status = (
+                    "indexed" if self._search is self._local else "pending"
+                )
+                doc.search_index_error = None
+                doc.search_index_attempts = 0
+                doc.chunk_count = len(prepared.chunks)
+                doc.indexed_at = indexed_at
+                doc.updated_by = user.id
+                doc.updated_at = indexed_at
+                s.add(doc)
+                s.add(
+                    KnowledgeDocumentContentRow(
+                        document_id=doc_id,
+                        kb_id=kb_id,
+                        text=meta["stored_text"],
+                        content_hash=meta["content_hash"],
+                        char_len=len(meta["stored_text"]),
+                        truncated=meta["stored_truncated"],
+                        updated_at=indexed_at,
+                    )
+                )
+                es_chunks: list[dict] = []
+                for chunk_index, chunk in enumerate(prepared.chunks):
+                    body = chunk["text"]
+                    text_hash = hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    chunk_id = _chunk_id(
+                        kb.active_index_version_id,
+                        doc_id,
+                        chunk_index,
+                        text_hash,
+                    )
+                    vector = (
+                        embedded.vectors[chunk_index]
+                        if chunk_index < len(embedded.vectors)
+                        else []
+                    )
+                    heading_path = chunk.get("heading_path") or []
+                    s.add(
+                        KnowledgeChunkRow(
+                            id=chunk_id,
+                            kb_id=kb_id,
+                            document_id=doc_id,
+                            chunk_index=chunk_index,
+                            text=body,
+                            text_hash=text_hash,
+                            heading_path=heading_path,
+                            char_start=chunk.get("char_start"),
+                            char_end=chunk.get("char_end"),
+                            token_count=len(_tokens(body)),
+                            chunk_metadata={
+                                "title": doc.title,
+                                "source_uri": uri,
+                                "source_type": doc.source_type,
+                                "tags": doc.tags or [],
+                                "category": doc.category,
+                                "heading_path": heading_path,
+                            },
+                            embedding=vector,
+                            embedding_ref=f"{kb.active_index_version_id}:{chunk_id}",
+                            indexed_at=indexed_at,
+                        )
+                    )
+                    es_chunks.append(
+                        {
+                            "chunk_id": chunk_id,
+                            "chunk_index": chunk_index,
+                            "text": body,
+                            "heading_path": heading_path,
+                            "embedding": vector,
+                        }
+                    )
+                s.add(
+                    KnowledgeIngestionJobRow(
+                        id=_uuid("job"),
+                        kb_id=kb_id,
+                        source_id=meta["source_id"],
+                        document_id=doc_id,
+                        type="import",
+                        trigger_type="datasource_sync",
+                        triggered_by=user.id,
+                        status="completed",
+                        total_count=1,
+                        succeeded_count=1,
+                        started_at=indexed_at,
+                        finished_at=indexed_at,
+                    )
+                )
+                persisted_docs.append(doc)
+                es_documents.append((doc, es_chunks))
+            await self._refresh_counts(s, kb)
+            await s.commit()
+        logger.bind(
+            phase="sql_batch_committed",
+            kb_id=kb_id,
+            batch_documents=len(persisted_docs),
+            batch_chunks=sum(len(chunks) for _doc, chunks in es_documents),
+        ).info("[datasource] durable batch committed")
+        return PersistedBatch(persisted_docs, payload=es_documents)
+
+    async def _index_synced_batch(
+        self, kb: KnowledgeBaseRow, batch: PersistedBatch
+    ) -> int:
+        if self._search is self._local:
+            return len(batch.documents)
+        result = await self._search.index_document_batch(
+            kb, batch.payload, refresh=False
+        )
+        async with AsyncSession(self._engine) as s:
+            rows = (
+                await s.exec(
+                    select(KnowledgeDocumentRow).where(
+                        KnowledgeDocumentRow.id.in_(
+                            list(result.indexed_document_ids | result.failed_document_ids)
+                        )
+                    )
+                )
+            ).all()
+            for row in rows:
+                if row.id in result.indexed_document_ids:
+                    row.search_index_status = "indexed"
+                    row.search_index_error = None
+                else:
+                    row.search_index_status = "failed"
+                    row.search_index_error = result.errors.get(row.id, "index failed")
+                    row.search_index_attempts += 1
+                s.add(row)
+            await s.commit()
+        if result.failed_document_ids:
+            raise RuntimeError(
+                f"Elasticsearch failed {len(result.failed_document_ids)} document(s)"
+            )
+        return len(result.indexed_document_ids)
+
+    async def _recover_search_index(
+        self, kb: KnowledgeBaseRow, ds_id: str
+    ) -> list[dict]:
+        """Replay SQL-committed search work after a crash or ES outage."""
+        if self._search is self._local:
+            return []
+        async with AsyncSession(self._engine) as s:
+            rows = (
+                await s.exec(
+                    select(KnowledgeDocumentRow).where(
+                        KnowledgeDocumentRow.kb_id == kb.id,
+                        KnowledgeDocumentRow.source_id == ds_id,
+                        KnowledgeDocumentRow.search_index_status.in_(
+                            ["pending", "failed", "delete_pending"]
+                        ),
+                    )
+                )
+            ).all()
+            live = [row for row in rows if row.deleted_at is None]
+            deleted = [row for row in rows if row.deleted_at is not None]
+            chunks = (
+                await s.exec(
+                    select(KnowledgeChunkRow).where(
+                        KnowledgeChunkRow.document_id.in_([row.id for row in live])
+                    )
+                )
+            ).all() if live else []
+        chunks_by_doc: dict[str, list[dict]] = {}
+        for chunk in chunks:
+            chunks_by_doc.setdefault(chunk.document_id, []).append(
+                {
+                    "chunk_id": chunk.id,
+                    "chunk_index": chunk.chunk_index,
+                    "text": chunk.text,
+                    "heading_path": chunk.heading_path,
+                    "embedding": chunk.embedding,
+                }
+            )
+        errors: list[dict] = []
+        if live:
+            batch = PersistedBatch(
+                live,
+                payload=[(row, chunks_by_doc.get(row.id, [])) for row in live],
+            )
+            try:
+                await self._index_synced_batch(kb, batch)
+            except Exception as exc:  # statuses were persisted by the helper
+                errors.append({"stage": "recover_index", "error": str(exc)[:500]})
+        if deleted:
+            ids = [row.id for row in deleted]
+            try:
+                delete_batch = getattr(self._search, "delete_document_batch", None)
+                if delete_batch is not None:
+                    await delete_batch(kb.id, ids, refresh=False)
+                else:
+                    for document_id in ids:
+                        await self._search.delete_document(kb.id, document_id)
+                async with AsyncSession(self._engine) as s:
+                    recovered = (
+                        await s.exec(
+                            select(KnowledgeDocumentRow).where(
+                                KnowledgeDocumentRow.id.in_(ids)
+                            )
+                        )
+                    ).all()
+                    for row in recovered:
+                        row.search_index_status = "deleted"
+                        row.search_index_error = None
+                        s.add(row)
+                    await s.commit()
+            except Exception as exc:
+                errors.append({"stage": "recover_delete", "error": str(exc)[:500]})
+        return errors
+
+    async def sync_data_source(
+        self, kb_id: str, ds_id: str, *, user: User, job_context=None
+    ) -> KnowledgeDataSourceRow:
         """Pull the data source and reconcile it into the KB (add/update/delete).
 
-        Runs as a normal coroutine; routes launch it fire-and-forget via
-        ``asyncio.create_task`` and clients poll the row's ``status``. Network
-        fetches are offloaded to threads and bounded in concurrency; ingestion is
-        serialized (one DB writer) to stay safe on sqlite.
+        A durable queue normally invokes this coroutine. Work overlaps through
+        bounded stages and checkpoints are written through ``job_context``.
         """
         # -- phase 0: claim the source (status=syncing) --------------------
         async with AsyncSession(self._engine) as s:
@@ -1500,25 +1973,28 @@ class KnowledgeService:
             "unchanged": 0, "deleted": 0, "failed": 0, "errors": [],
         }
         try:
+            if job_context is not None and await job_context.cancel_requested():
+                report["errors"] = []
+                await self._finalize_sync(
+                    ds_id,
+                    status="cancelled",
+                    report=report,
+                    error=None,
+                    active_job_id=job_context.job_id,
+                )
+                return await self.get_data_source(kb_id, ds_id, user=user)
             adapter = get_adapter(source_type, source_key, source_config)
             discovered = await asyncio.to_thread(adapter.discover)
             report["discovered"] = len(discovered)
-
-            # fetch + normalize concurrently (network-bound, off the event loop)
-            sem = asyncio.Semaphore(SYNC_FETCH_CONCURRENCY)
-
-            async def _fetch(d):
-                async with sem:
-                    try:
-                        body = await asyncio.to_thread(adapter.fetch, d)
-                        return d, adapter.emit(d, body), None
-                    except Exception as exc:  # noqa: BLE001 — record and continue
-                        return d, None, str(exc)
-
-            fetched = await asyncio.gather(*[_fetch(d) for d in discovered]) if discovered else []
-
-            # snapshot existing docs owned by this data source (for diff)
+            logger.bind(
+                job_id=getattr(job_context, "job_id", None),
+                datasource_id=ds_id,
+                phase="discovered",
+                documents=len(discovered),
+            ).info("[datasource] discovery completed")
             async with AsyncSession(self._engine) as s:
+                kb = await s.get(KnowledgeBaseRow, kb_id)
+                ds = await s.get(KnowledgeDataSourceRow, ds_id)
                 existing_rows = (
                     await s.exec(
                         select(KnowledgeDocumentRow).where(
@@ -1528,43 +2004,78 @@ class KnowledgeService:
                         )
                     )
                 ).all()
+            if kb is None or ds is None:
+                raise PermissionError("data source not found")
+            if job_context is not None:
+                await job_context.checkpoint({"phase": "recovering"})
+            recovery_errors = await self._recover_search_index(kb, ds_id)
+            if recovery_errors or any(
+                row.search_index_status in {"pending", "failed"}
+                for row in existing_rows
+            ):
+                async with AsyncSession(self._engine) as s:
+                    existing_rows = (
+                        await s.exec(
+                            select(KnowledgeDocumentRow).where(
+                                KnowledgeDocumentRow.kb_id == kb_id,
+                                KnowledgeDocumentRow.source_id == ds_id,
+                                KnowledgeDocumentRow.deleted_at.is_(None),
+                            )
+                        )
+                    ).all()
             existing_by_uri = {r.uri: r for r in existing_rows}
+            seen_uris = {
+                item.source_url or adapter.make_doc_id(item.path) for item in discovered
+            }
+            changed_counts = {"added": 0, "updated": 0}
 
-            seen_uris: set[str] = set()
-            for d, sd, err in fetched:
-                if err is not None or sd is None:
-                    report["failed"] += 1
-                    report["errors"].append({"path": d.path, "error": err})
-                    continue
-                uri = sd.source_url or sd.doc_id
-                seen_uris.add(uri)
-                prev = existing_by_uri.get(uri)
-                if prev is not None and prev.content_hash == sd.content_hash and prev.status == "indexed":
-                    report["unchanged"] += 1
-                    continue
-                try:
-                    await self.import_text_document(
-                        kb_id,
-                        user=user,
-                        title=sd.title,
-                        content=sd.content,
-                        uri=uri,
-                        source_type=source_type,
-                        source_id=ds_id,
-                        mime_type="text/markdown",
-                        description=sd.summary or "",
-                        tags=[sd.section] if sd.section else [],
-                        category=sd.product,
-                        custom_metadata=self._synced_doc_metadata(ds_id, source_key, sd),
-                        trigger_type="datasource_sync",
-                    )
-                    if prev is None:
-                        report["added"] += 1
-                    else:
-                        report["updated"] += 1
-                except Exception as exc:  # noqa: BLE001
-                    report["failed"] += 1
-                    report["errors"].append({"path": d.path, "error": str(exc)})
+            async def fetch_one(item):
+                body = await asyncio.to_thread(adapter.fetch, item)
+                return FetchedDocument(item, body)
+
+            async def prepare_one(fetched):
+                return await self._prepare_synced_document(
+                    kb, ds, source_key, adapter, existing_by_uri, fetched
+                )
+
+            async def embed_many(documents):
+                return await self._embed_synced_documents(kb, documents)
+
+            async def persist_many(documents):
+                persisted = await self._persist_synced_batch(kb_id, user, documents)
+                for document in documents:
+                    key = "updated" if document.prepared.metadata["was_existing"] else "added"
+                    changed_counts[key] += 1
+                return persisted
+
+            async def index_many(batch):
+                return await self._index_synced_batch(kb, batch)
+
+            async def checkpoint(progress):
+                if job_context is not None:
+                    await job_context.checkpoint(progress)
+
+            async def cancel_requested():
+                return bool(
+                    job_context is not None
+                    and await job_context.cancel_requested()
+                )
+
+            outcome = await SyncPipeline(
+                limits=self._pipeline_limits,
+                fetch=fetch_one,
+                prepare=prepare_one,
+                embed=embed_many,
+                persist_batch=persist_many,
+                index_batch=index_many,
+                checkpoint=checkpoint,
+                cancel_requested=cancel_requested,
+            ).run(discovered)
+            report["added"] = changed_counts["added"]
+            report["updated"] = changed_counts["updated"]
+            report["unchanged"] = outcome.progress["unchanged"]
+            report["failed"] = outcome.progress["failed"] + len(recovery_errors)
+            report["errors"] = recovery_errors + outcome.errors
 
             # deletions — skip when discovery is known-incomplete so a transient
             # crawl failure can't be mistaken for source-side removal.
@@ -1573,21 +2084,39 @@ class KnowledgeService:
                 if stale_ids:
                     await self._soft_delete_documents(kb_id, stale_ids, user=user)
                     report["deleted"] = len(stale_ids)
-
-            processed = report["added"] + report["updated"] + report["unchanged"]
-            if report["failed"] and processed == 0:
-                status = "failed"
-            elif report["failed"]:
+            if self._search is not self._local and outcome.status != "failed":
+                await self._search.refresh_kb(kb_id)
+            status = outcome.status
+            if recovery_errors and status == "succeeded":
                 status = "partial"
-            else:
-                status = "succeeded"
             # cap stored error detail so a mass failure can't bloat the row
             report["errors"] = report["errors"][:20]
-            await self._finalize_sync(ds_id, status=status, report=report, error=None)
+            await self._finalize_sync(
+                ds_id,
+                status=status,
+                report=report,
+                error=None,
+                active_job_id=getattr(job_context, "job_id", None),
+            )
+            logger.bind(
+                job_id=getattr(job_context, "job_id", None),
+                datasource_id=ds_id,
+                phase="finalized",
+                status=status,
+                discovered=report["discovered"],
+                indexed=outcome.progress["indexed"],
+                failed=report["failed"],
+            ).info("[datasource] sync finalized")
         except Exception as exc:  # noqa: BLE001 — surface as failed status, don't crash the task
             logger.exception(f"[datasource] sync failed for {ds_id}: {exc}")
             report["errors"] = report["errors"][:20]
-            await self._finalize_sync(ds_id, status="failed", report=report, error=str(exc))
+            await self._finalize_sync(
+                ds_id,
+                status="failed",
+                report=report,
+                error=str(exc),
+                active_job_id=getattr(job_context, "job_id", None),
+            )
 
         return await self.get_data_source(kb_id, ds_id, user=user)
 
@@ -1606,6 +2135,9 @@ class KnowledgeService:
                     continue
                 await s.exec(delete(KnowledgeChunkRow).where(KnowledgeChunkRow.document_id == doc_id))
                 doc.status = "deleted"
+                doc.search_index_status = (
+                    "deleted" if self._search is self._local else "delete_pending"
+                )
                 doc.deleted_at = now
                 doc.chunk_count = 0
                 doc.updated_by = user.id
@@ -1616,7 +2148,15 @@ class KnowledgeService:
             await s.commit()
         await self._delete_from_engine_best_effort(kb_id, removed)
 
-    async def _finalize_sync(self, ds_id: str, *, status: str, report: dict, error: Optional[str]) -> None:
+    async def _finalize_sync(
+        self,
+        ds_id: str,
+        *,
+        status: str,
+        report: dict,
+        error: Optional[str],
+        active_job_id: Optional[str] = None,
+    ) -> None:
         async with AsyncSession(self._engine) as s:
             ds = await s.get(KnowledgeDataSourceRow, ds_id)
             if ds is None:
@@ -1633,6 +2173,8 @@ class KnowledgeService:
             ).one()
             ds.doc_count = int(doc_count)
             ds.status = status
+            if active_job_id is None or ds.active_job_id == active_job_id:
+                ds.active_job_id = None
             ds.last_error = error
             ds.last_sync_report = report
             flag_modified(ds, "last_sync_report")

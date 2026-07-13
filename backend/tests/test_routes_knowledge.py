@@ -133,6 +133,38 @@ def test_knowledge_base_import_search_and_fetch():
     assert "online inference" in fetched.json()["text"]
 
 
+def test_reimport_keeps_deterministic_chunk_ids():
+    c = _client()
+    kb = _create_kb(c)
+    payload = {
+        "title": "Stable",
+        "uri": "https://docs.example.com/stable",
+        "content": "# Stable\n\nThe same content produces the same chunks.",
+    }
+
+    first = c.post(
+        f"/v1/knowledge-bases/{kb['id']}/documents/import", json=payload
+    )
+    assert first.status_code == 202
+    assert _drain(c) == 1
+    first_ids = {
+        chunk["id"]
+        for chunk in c.get(f"/v1/knowledge-bases/{kb['id']}/chunks").json()["data"]
+    }
+
+    second = c.post(
+        f"/v1/knowledge-bases/{kb['id']}/documents/import", json=payload
+    )
+    assert second.status_code == 202
+    assert _drain(c) == 1
+    second_ids = {
+        chunk["id"]
+        for chunk in c.get(f"/v1/knowledge-bases/{kb['id']}/chunks").json()["data"]
+    }
+
+    assert second_ids == first_ids
+
+
 def test_private_kb_is_not_queryable_by_other_user():
     owner = _client(user_id="u_owner", role="user")
     kb = _create_kb(owner)

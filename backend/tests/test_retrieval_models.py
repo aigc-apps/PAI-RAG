@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """DashScope-native embedding/rerank client tests — offline, against a fake
 `httpx.AsyncClient` (no network). Asserts request-body shape (model / input /
 parameters, batching ≤10) and response parsing (embeddings placed back by
@@ -114,6 +115,54 @@ def test_embed_raises_when_vector_missing(monkeypatch):
         assert False, "expected RuntimeError"
     except RuntimeError as ex:
         assert "no vector" in str(ex)
+
+
+def test_dashscope_embed_runs_api_batches_concurrently_and_reuses_client():
+    class ConcurrentClient:
+        def __init__(self):
+            self.active = 0
+            self.max_active = 0
+            self.calls = []
+            self.closed = False
+
+        async def post(self, url, headers=None, json=None):
+            self.active += 1
+            self.max_active = max(self.max_active, self.active)
+            self.calls.append(json)
+            await asyncio.sleep(0.01)
+            self.active -= 1
+            entries = [
+                {
+                    "text_index": i,
+                    "embedding": [float(text.removeprefix("t"))],
+                }
+                for i, text in enumerate(json["input"]["texts"])
+            ]
+            return _FakeResp({"output": {"embeddings": entries}})
+
+        async def aclose(self):
+            self.closed = True
+
+    async def scenario():
+        client = ConcurrentClient()
+        embedder = DashScopeEmbedder(
+            base_url="https://ds/emb",
+            api_key="k",
+            model="text-embedding-v4",
+            dimension=8,
+            concurrency_gate=asyncio.Semaphore(2),
+            client=client,
+        )
+
+        vectors = await embedder.embed([f"t{i}" for i in range(25)])
+
+        assert vectors == [[float(i)] for i in range(25)]
+        assert sorted(len(call["input"]["texts"]) for call in client.calls) == [5, 10, 10]
+        assert client.max_active == 2
+        await embedder.aclose()
+        assert client.closed is False  # injected clients remain caller-owned
+
+    asyncio.run(scenario())
 
 
 # --------------------------------------------------------------------------- #

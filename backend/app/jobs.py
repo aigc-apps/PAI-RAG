@@ -15,11 +15,13 @@ future HITL pause: the worker never claims it; an external event returns it to
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import inspect
 from typing import Awaitable, Callable, Optional
 
 from loguru import logger
-from sqlalchemy import or_, update
+from sqlalchemy import and_, or_, update
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -27,14 +29,42 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.models import BackgroundJobRow
 from app.store.base import User, _uuid
 
-# A handler receives the job payload and returns an optional JSON-able result.
-Handler = Callable[[dict], Awaitable[Optional[dict]]]
-
-TERMINAL = {"succeeded", "failed"}
+TERMINAL = {"succeeded", "partial", "failed", "cancelled"}
 
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+@dataclass(frozen=True)
+class JobOutcome:
+    status: str = "succeeded"
+    result: Optional[dict] = None
+
+
+class JobCancelled(Exception):
+    """Raised cooperatively when a durable cancellation has been requested."""
+
+
+@dataclass(frozen=True)
+class JobContext:
+    job_id: str
+    queue: "JobQueue"
+
+    async def checkpoint(self, progress: dict) -> None:
+        await self.queue.checkpoint(self.job_id, progress)
+
+    async def cancel_requested(self) -> bool:
+        return await self.queue.is_cancel_requested(self.job_id)
+
+    async def raise_if_cancelled(self) -> None:
+        if await self.cancel_requested():
+            raise JobCancelled(self.job_id)
+
+
+# New handlers receive (payload, context). One-argument handlers remain supported
+# so non-sync jobs can migrate independently.
+Handler = Callable[..., Awaitable[Optional[dict] | JobOutcome]]
 
 
 class JobQueue:
@@ -48,12 +78,16 @@ class JobQueue:
         default_max_attempts: int = 3,
         poll_interval: float = 3.0,
         retry_backoff: float = 1.0,
+        heartbeat_seconds: float = 10.0,
+        lease_seconds: float = 60.0,
     ) -> None:
         self._engine = engine
         self._concurrency = max(1, concurrency)
         self._default_max_attempts = max(1, default_max_attempts)
         self._poll_interval = poll_interval
         self._retry_backoff = retry_backoff
+        self._heartbeat_seconds = max(1.0, heartbeat_seconds)
+        self._lease_seconds = max(self._heartbeat_seconds * 3, lease_seconds)
         self._dialect = engine.dialect.name
         self._handlers: dict[str, Handler] = {}
         self._wake = asyncio.Event()
@@ -76,7 +110,31 @@ class JobQueue:
         run_after: Optional[datetime] = None,
         max_attempts: Optional[int] = None,
     ) -> str:
-        job = BackgroundJobRow(
+        job = self.build_job(
+            kind=kind,
+            payload=payload,
+            kb_id=kb_id,
+            created_by=created_by,
+            run_after=run_after,
+            max_attempts=max_attempts,
+        )
+        async with AsyncSession(self._engine, expire_on_commit=False) as s:
+            s.add(job)
+            await s.commit()
+        self.notify()
+        return job.id
+
+    def build_job(
+        self,
+        *,
+        kind: str,
+        payload: Optional[dict] = None,
+        kb_id: Optional[str] = None,
+        created_by: Optional[str] = None,
+        run_after: Optional[datetime] = None,
+        max_attempts: Optional[int] = None,
+    ) -> BackgroundJobRow:
+        return BackgroundJobRow(
             id=_uuid("job"),
             kind=kind,
             status="queued",
@@ -86,22 +144,30 @@ class JobQueue:
             run_after=run_after,
             max_attempts=max_attempts or self._default_max_attempts,
         )
-        async with AsyncSession(self._engine, expire_on_commit=False) as s:
-            s.add(job)
-            await s.commit()
+
+    def notify(self) -> None:
         self._wake.set()
-        return job.id
 
     # -- claim (dialect-aware) --------------------------------------------
     async def claim_one(self, worker_id: str) -> Optional[BackgroundJobRow]:
         now = _now()
+        due = or_(
+            BackgroundJobRow.run_after.is_(None),
+            BackgroundJobRow.run_after <= now,
+        )
         stmt = (
             select(BackgroundJobRow)
             .where(
-                BackgroundJobRow.status == "queued",
                 or_(
-                    BackgroundJobRow.run_after.is_(None),
-                    BackgroundJobRow.run_after <= now,
+                    and_(
+                        BackgroundJobRow.status.in_(["queued", "retry_wait"]),
+                        due,
+                    ),
+                    and_(
+                        BackgroundJobRow.status == "running",
+                        BackgroundJobRow.lease_expires_at.is_not(None),
+                        BackgroundJobRow.lease_expires_at < now,
+                    ),
                 ),
             )
             .order_by(BackgroundJobRow.priority, BackgroundJobRow.created_at)
@@ -115,13 +181,20 @@ class JobQueue:
                 job = (await session.exec(stmt)).first()
             if job is None:
                 return None
+            reclaimed = job.status == "running"
             job.status = "running"
             job.worker_id = worker_id
             job.claimed_at = now
-            job.started_at = now
+            job.heartbeat_at = now
+            job.lease_expires_at = now + timedelta(seconds=self._lease_seconds)
+            job.started_at = job.started_at or now
             job.updated_at = now
             session.add(job)
             await session.commit()
+            if reclaimed:
+                logger.bind(job_id=job.id, phase="lease_reclaim").warning(
+                    "[jobs] reclaimed expired lease"
+                )
             return job
 
         async with AsyncSession(self._engine, expire_on_commit=False) as s:
@@ -133,32 +206,107 @@ class JobQueue:
             async with self._claim_lock:
                 return await _do(s)
 
+    async def checkpoint(self, job_id: str, progress: dict) -> None:
+        """Persist a complete progress snapshot for a non-terminal job."""
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(BackgroundJobRow, job_id)
+            if row is None or row.status in TERMINAL | {"partial", "cancelled"}:
+                return
+            row.progress = dict(progress)
+            row.updated_at = _now()
+            s.add(row)
+            await s.commit()
+
+    async def request_cancel(self, job_id: str) -> bool:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(BackgroundJobRow, job_id)
+            if row is None or row.status in TERMINAL | {"partial", "cancelled"}:
+                return False
+            row.cancel_requested_at = row.cancel_requested_at or _now()
+            row.updated_at = _now()
+            s.add(row)
+            await s.commit()
+        self._wake.set()
+        return True
+
+    async def is_cancel_requested(self, job_id: str) -> bool:
+        async with AsyncSession(self._engine) as s:
+            row = await s.get(BackgroundJobRow, job_id)
+            return bool(row is not None and row.cancel_requested_at is not None)
+
     # -- dispatch + outcome ------------------------------------------------
     async def _process(self, job: BackgroundJobRow) -> None:
         handler = self._handlers.get(job.kind)
         if handler is None:
             await self._fail(job.id, job.attempts, f"no handler for kind {job.kind!r}")
             return
+        ctx = JobContext(job.id, self)
+        heartbeat = asyncio.create_task(
+            self._heartbeat_loop(job.id, job.worker_id or ""),
+            name=f"job-heartbeat-{job.id}",
+        )
         try:
-            result = await handler(dict(job.payload or {}))
+            if len(inspect.signature(handler).parameters) >= 2:
+                result = await handler(dict(job.payload or {}), ctx)
+            else:
+                result = await handler(dict(job.payload or {}))
+        except JobCancelled:
+            await self._finish(job.id, JobOutcome(status="cancelled"))
         except Exception as exc:  # noqa: BLE001 — record and (maybe) retry
             logger.warning(f"[jobs] {job.kind} job {job.id} failed: {exc!r}")
             await self._on_error(job, exc)
         else:
-            await self._succeed(job.id, result)
+            outcome = result if isinstance(result, JobOutcome) else JobOutcome(result=result)
+            if await ctx.cancel_requested() and outcome.status == "succeeded":
+                outcome = JobOutcome(status="cancelled", result=outcome.result)
+            await self._finish(job.id, outcome)
+        finally:
+            heartbeat.cancel()
+            try:
+                await heartbeat
+            except asyncio.CancelledError:
+                pass
 
-    async def _succeed(self, job_id: str, result: Optional[dict]) -> None:
+    async def _heartbeat_loop(self, job_id: str, worker_id: str) -> None:
+        while True:
+            await asyncio.sleep(self._heartbeat_seconds)
+            now = _now()
+            async with AsyncSession(self._engine) as s:
+                await s.exec(
+                    update(BackgroundJobRow)
+                    .where(
+                        BackgroundJobRow.id == job_id,
+                        BackgroundJobRow.status == "running",
+                        BackgroundJobRow.worker_id == worker_id,
+                    )
+                    .values(
+                        heartbeat_at=now,
+                        lease_expires_at=now + timedelta(seconds=self._lease_seconds),
+                        updated_at=now,
+                    )
+                )
+                await s.commit()
+
+    async def _finish(self, job_id: str, outcome: JobOutcome) -> None:
+        if outcome.status not in TERMINAL:
+            raise ValueError(f"unsupported successful job outcome {outcome.status!r}")
         async with AsyncSession(self._engine) as s:
             row = await s.get(BackgroundJobRow, job_id)
             if row is None:
                 return
-            row.status = "succeeded"
-            row.result = result
+            row.status = outcome.status
+            row.result = outcome.result
             row.error = None
             row.finished_at = _now()
             row.updated_at = _now()
+            row.worker_id = None
+            row.heartbeat_at = None
+            row.lease_expires_at = None
             s.add(row)
             await s.commit()
+
+    async def _succeed(self, job_id: str, result: Optional[dict]) -> None:
+        await self._finish(job_id, JobOutcome(result=result))
 
     async def _on_error(self, job: BackgroundJobRow, exc: Exception) -> None:
         attempts = job.attempts + 1
@@ -169,10 +317,12 @@ class JobQueue:
                 row = await s.get(BackgroundJobRow, job.id)
                 if row is None:
                     return
-                row.status = "queued"
+                row.status = "retry_wait"
                 row.attempts = attempts
                 row.run_after = run_after
                 row.worker_id = None
+                row.heartbeat_at = None
+                row.lease_expires_at = None
                 row.error = str(exc)
                 row.updated_at = _now()
                 s.add(row)
@@ -191,6 +341,9 @@ class JobQueue:
             row.error = error
             row.finished_at = _now()
             row.updated_at = _now()
+            row.worker_id = None
+            row.heartbeat_at = None
+            row.lease_expires_at = None
             s.add(row)
             await s.commit()
 
@@ -304,12 +457,19 @@ def make_kb_ingest_handler(knowledge) -> Handler:
 
 
 def make_kb_sync_handler(knowledge) -> Handler:
-    async def handler(payload: dict) -> Optional[dict]:
+    async def handler(payload: dict, context: JobContext) -> JobOutcome:
         user = _user_from_payload(payload)
         ds = await knowledge.sync_data_source(
-            payload["kb_id"], payload["ds_id"], user=user
+            payload["kb_id"], payload["ds_id"], user=user, job_context=context
         )
-        return {"status": ds.status, "doc_count": ds.doc_count}
+        return JobOutcome(
+            status=ds.status,
+            result={
+                "status": ds.status,
+                "doc_count": ds.doc_count,
+                "report": ds.last_sync_report,
+            },
+        )
 
     return handler
 

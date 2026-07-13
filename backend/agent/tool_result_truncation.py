@@ -15,28 +15,25 @@ This module truncates by *content shape* instead:
   a string (e.g. a shell tool's ``{"stdout": "<json>"}``) is parsed and shrunk
   in place.
 
-A final token-accurate backstop (``_text_head_tail``) guarantees the result
+A final character-estimated backstop (``_text_head_tail``) keeps the result
 fits ``max_tokens`` even when the per-leaf rules alone don't get there.
 
 Only the LLM-facing copy is affected; the displayed/persisted tool output is
-left full elsewhere. This module depends on stdlib ``json`` and
-``memory.utils`` only (no third-party deps) and must not import ``budgeting``
-(would be circular).
+left full elsewhere. This module uses only stdlib and must not import
+``budgeting`` (which would be circular).
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any, Optional
-
-from memory.utils import estimate_tokens_in_text, truncate
+from typing import Any
 
 # Same marker string used by the head-only path in budgeting, kept local to
 # avoid a circular import.
 TRUNCATED_MARKER = "\n...[content truncated]"
 
-# ~4 chars/token heuristic used when no tokenizer is available (lean mode).
-CHARS_PER_TOKEN = 4
+CJK_CHARS_PER_TOKEN = 1.5
+OTHER_CHARS_PER_TOKEN = 2.5
 
 # Compact JSON separators (no space after ',' / ':') — drops the pretty-print
 # whitespace of the original and squeezes separators. Lossless for the model.
@@ -59,12 +56,14 @@ def _omit(n: int, unit: str) -> str:
     return f"…[{n} {unit} omitted]…"
 
 
-def _estimate(text: str, tokenizer: Any) -> int:
+def _estimate(text: str) -> int:
     if not text:
         return 0
-    if tokenizer is None:
-        return max(1, len(text) // CHARS_PER_TOKEN)
-    return estimate_tokens_in_text(text, tokenizer=tokenizer)
+    n_chars = len(text)
+    n_bytes = len(text.encode("utf-8"))
+    cjk = min((n_bytes - n_chars) / 2, n_chars)
+    other = n_chars - cjk
+    return int(cjk / CJK_CHARS_PER_TOKEN + other / OTHER_CHARS_PER_TOKEN)
 
 
 def _str_head_tail(s: str, budget_chars: int = STRING_MAX_CHARS,
@@ -83,40 +82,27 @@ def _looks_json(s: str) -> bool:
     return len(t) > STRING_MAX_CHARS and t[:1] in "{[" and t[-1:] in "}]"
 
 
-def _text_head_tail(text: str, max_tokens: int, tokenizer: Any,
+def _text_head_tail(text: str, max_tokens: int,
                     ratio: float = TEXT_HEAD_RATIO) -> str:
-    """Token-accurate head/tail for a whole string; char fallback if no tokenizer.
+    """Character-estimated head/tail truncation for a whole string.
 
     Keeps the first ``max_tokens*ratio`` tokens and the last ``max_tokens*(1-ratio)``
     tokens, with a marker naming how many tokens were dropped from the middle.
     """
     if max_tokens <= 0:
         return ""
-    total = _estimate(text, tokenizer)
+    total = _estimate(text)
     if total <= max_tokens:
         return text
     head_tokens = max(1, int(max_tokens * ratio))
     tail_tokens = max(0, max_tokens - head_tokens)
     omitted = max(0, total - max_tokens)
 
-    if tokenizer is None:
-        head = text[: head_tokens * CHARS_PER_TOKEN]
-        tail = text[-tail_tokens * CHARS_PER_TOKEN:] if tail_tokens > 0 else ""
-    else:
-        try:
-            head = truncate(text, max_token=head_tokens, tokenizer=tokenizer)[0]
-            if tail_tokens > 0:
-                # `estimate_tokens_in_text` excludes special tokens while
-                # `truncate` counts include them, so `total` is a lower bound on
-                # the real token count; clamp the window start to stay valid.
-                start = max(0, min(total - tail_tokens, total - 1))
-                tail = truncate(text, max_token=total, start_token=start,
-                                tokenizer=tokenizer)[0]
-            else:
-                tail = ""
-        except Exception:
-            head = text[: head_tokens * CHARS_PER_TOKEN]
-            tail = text[-tail_tokens * CHARS_PER_TOKEN:] if tail_tokens > 0 else ""
+    chars_per_estimated_token = len(text) / max(total, 1)
+    head_chars = max(1, int(head_tokens * chars_per_estimated_token))
+    tail_chars = max(0, int(tail_tokens * chars_per_estimated_token))
+    head = text[:head_chars]
+    tail = text[-tail_chars:] if tail_chars > 0 else ""
     return f"{head}\n{_omit(omitted, 'tokens')}\n{tail}"
 
 
@@ -168,7 +154,7 @@ def _shrink(node: Any, depth: int = 0) -> Any:
     return node
 
 
-def smart_truncate(content: str, max_tokens: int, tokenizer: Any = None) -> str:
+def smart_truncate(content: str, max_tokens: int) -> str:
     """Structurally truncate ``content`` to roughly ``max_tokens``.
 
     JSON is shrunk by shape (arrays/objects/long strings); anything else gets a
@@ -178,7 +164,7 @@ def smart_truncate(content: str, max_tokens: int, tokenizer: Any = None) -> str:
     """
     if not content:
         return content
-    if _estimate(content, tokenizer) <= max_tokens:
+    if _estimate(content) <= max_tokens:
         return content
 
     try:
@@ -187,9 +173,9 @@ def smart_truncate(content: str, max_tokens: int, tokenizer: Any = None) -> str:
         obj = _MISSING
 
     if obj is _MISSING:
-        return _text_head_tail(content, max_tokens, tokenizer) + TRUNCATED_MARKER
+        return _text_head_tail(content, max_tokens) + TRUNCATED_MARKER
 
     shrunk = json.dumps(_shrink(obj), ensure_ascii=False, separators=_SEP)
-    if _estimate(shrunk, tokenizer) > max_tokens:
-        shrunk = _text_head_tail(shrunk, max_tokens, tokenizer)
+    if _estimate(shrunk) > max_tokens:
+        shrunk = _text_head_tail(shrunk, max_tokens)
     return shrunk + TRUNCATED_MARKER

@@ -15,6 +15,7 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.engine import make_url
 from app.config import get_settings
 from app.deps import AppState, rebuild_app_state_from_config, reload_app_state
 from app.db import make_engine, create_all, migrate
@@ -36,10 +37,16 @@ from app.routes.agents import router as agents_router
 from app.knowledge import KnowledgeService
 from app.jobs import JobQueue, register_knowledge_handlers
 from app.search_engine import build_search_engine
-from app.agent_config import apply_runtime_status, load_agent_config
+from app.sync_pipeline import PipelineLimits
+from app.agent_config import DEFAULT_DOCUMENT, apply_runtime_status
 from app.agent_config_store import SqlAgentConfigStore
 from agent.tools.defaults import build_default_registry
 from agent.tools.skills import load_skills
+
+
+def _new_database_config_seed(_settings=None):
+    """Return a clean seed; local YAML must never initialize a new database."""
+    return DEFAULT_DOCUMENT.model_copy(deep=True)
 
 
 def _build_llm(settings) -> LeanLLM | None:
@@ -60,14 +67,28 @@ def _build_llm(settings) -> LeanLLM | None:
 
 def _init_tracing(app: FastAPI, settings) -> None:
     """Best-effort OpenTelemetry init. Imported at runtime (not module top) so the
-    lean service still imports when the trace extension / opentelemetry is absent
-    (see tests/test_lean_import_isolation). Any failure degrades to no tracing."""
+    service does not load the OTel stack when tracing is not configured. Any
+    initialization failure degrades to no tracing."""
     try:
+        from extensions.trace.config import TraceConfig
+
+        if not TraceConfig.from_env().enabled:
+            logger.info("[trace] tracing disabled (no OTLP endpoint / LANGFUSE_* configured)")
+            return
         from extensions.trace import init_tracing, instrument_fastapi
         if init_tracing(settings):
             instrument_fastapi(app)
     except Exception as e:  # extension or opentelemetry absent — run without tracing
         logger.info("[trace] tracing extension unavailable, continuing without it: {}", e)
+
+
+def _log_database_backend(settings) -> None:
+    backend = (
+        "sqlite (memory)"
+        if settings.store_backend == "memory"
+        else make_url(settings.db_url).get_backend_name()
+    )
+    logger.info("[db] database backend = {}", backend)
 
 
 async def _reload_config_from_state(app: FastAPI, settings) -> None:
@@ -85,6 +106,7 @@ async def _reload_config_from_state(app: FastAPI, settings) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+    _log_database_backend(settings)
     _init_tracing(app, settings)
     engine = None
     if settings.store_backend == "memory":
@@ -106,14 +128,18 @@ async def lifespan(app: FastAPI):
         store = SqlStore(engine)
     config_store = SqlAgentConfigStore(
         engine,
-        seed=load_agent_config(settings.config_path),
+        seed=_new_database_config_seed(settings),
     )
     stored_config = await config_store.load()
     agent_config = stored_config.doc
     # Router before KnowledgeService: the KB service resolves its embedder/reranker
     # through the router (ingest + query). One router instance, stored on AppState.
     catalog = ModelCatalog(**agent_config.models)
-    provider_router = ProviderRouter(catalog, path=settings.models_path)
+    provider_router = ProviderRouter(
+        catalog,
+        path=settings.models_path,
+        embedding_concurrency=settings.sync_embedding_concurrency,
+    )
     # Built before the registry so knowledge_search can bind to it; the same
     # instance is stored on AppState below and reused for the REST query routes.
     # Global vector-store selection lives in knowledgebase.vectordb (see
@@ -125,6 +151,13 @@ async def lifespan(app: FastAPI):
         search_engine=build_search_engine(settings, engine, vectordb=vectordb),
         fallback_to_local=(vectordb.engine != "local"),
         router=provider_router,
+        pipeline_limits=PipelineLimits(
+            fetch_concurrency=settings.sync_fetch_concurrency,
+            fetched_queue_size=settings.sync_fetch_queue_size,
+            sql_batch_documents=settings.sync_sql_batch_documents,
+            sql_batch_chunks=settings.sync_sql_batch_chunks,
+            progress_interval_seconds=settings.sync_progress_interval_seconds,
+        ),
     )
     # Wire the control-plane reloader lazily: it reads app.state.app_state on
     # call (set just below), so tools like enable_skill_for_agent can refresh the
@@ -145,9 +178,10 @@ async def lifespan(app: FastAPI):
         engine,
         concurrency=settings.job_worker_concurrency,
         default_max_attempts=settings.job_max_attempts,
+        heartbeat_seconds=settings.job_heartbeat_seconds,
+        lease_seconds=settings.job_lease_seconds,
     )
     register_knowledge_handlers(jobs, knowledge)
-    await jobs.recover_orphans()
     jobs.start()
     app.state.app_state = AppState(
         store=store, llm=_build_llm(settings), default_model=settings.default_model,
@@ -175,6 +209,7 @@ async def lifespan(app: FastAPI):
     finally:
         # Stop the worker pool cleanly on shutdown (no shutdown hook existed before).
         await jobs.stop()
+        await provider_router.aclose()
         # Flush any buffered trace spans before the process exits.
         try:
             from extensions.trace import shutdown_tracing

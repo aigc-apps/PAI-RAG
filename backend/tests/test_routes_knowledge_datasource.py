@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 import asyncio
 import os
 import sys
@@ -15,9 +16,13 @@ from app.db import create_all, make_engine
 from app.deps import AppState
 from app.jobs import JobQueue, register_knowledge_handlers
 from app.knowledge import KnowledgeService
+from app.models import KnowledgeDocumentRow
+from app.search_engine import BatchIndexResult
+from app.sync_pipeline import PipelineLimits
 from app.routes.knowledge import router as knowledge_router
 from app.store.base import User
 from app.store.memory import InMemoryStore
+from sqlmodel.ext.asyncio.session import AsyncSession
 from tests.authutil import apply_auth
 
 
@@ -195,6 +200,80 @@ def test_sync_partial_on_fetch_error(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_sync_persists_and_indexes_in_document_batches(monkeypatch):
+    entries = [("快速开始", f"文档{i}", f"doc-{i}") for i in range(7)]
+    world = {
+        "manifest": _manifest(entries),
+        "bodies": {
+            f"https://help.aliyun.com/zh/pai/doc-{i}.md": f"# 文档{i}\n\n内容 {i}\n"
+            for i in range(7)
+        },
+    }
+    _install_fake(monkeypatch, world)
+
+    class BatchSearch:
+        name = "elasticsearch"
+
+        def __init__(self):
+            self.batch_sizes = []
+            self.refreshes = []
+
+        async def index_document_batch(self, kb, documents, refresh=False):
+            self.batch_sizes.append(len(documents))
+            ids = {doc.id for doc, _ in documents}
+            return BatchIndexResult(ids, set(), {})
+
+        async def refresh_kb(self, kb_id):
+            self.refreshes.append(kb_id)
+
+    async def scenario():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        search = BatchSearch()
+        svc = KnowledgeService(
+            engine,
+            search_engine=search,
+            pipeline_limits=PipelineLimits(
+                fetch_concurrency=3,
+                fetched_queue_size=3,
+                sql_batch_documents=3,
+                sql_batch_chunks=100,
+            ),
+        )
+        kb = await svc.create_kb(user=ADMIN, name="PAI KB")
+        ds = await svc.create_data_source(
+            kb.id,
+            user=ADMIN,
+            name="Aliyun PAI",
+            source_type="llms_txt",
+            source_config={"product": "pai"},
+        )
+
+        result = await svc.sync_data_source(kb.id, ds.id, user=ADMIN)
+        docs, total = await svc.list_documents(kb.id, user=ADMIN)
+
+        assert result.status == "succeeded"
+        assert result.last_sync_report["added"] == 7
+        assert total == 7
+        assert all(doc.search_index_status == "indexed" for doc in docs)
+        assert search.batch_sizes == [3, 3, 1]
+        assert search.refreshes == [kb.id]
+
+        # Simulate a crash after SQL commit but before ES completion. The next
+        # run replays the pending document from SQL, while source content remains
+        # unchanged and is not embedded/persisted again.
+        async with AsyncSession(engine) as session:
+            pending = await session.get(KnowledgeDocumentRow, docs[0].id)
+            pending.search_index_status = "pending"
+            session.add(pending)
+            await session.commit()
+        recovered = await svc.sync_data_source(kb.id, ds.id, user=ADMIN)
+        assert recovered.last_sync_report["unchanged"] == 7
+        assert search.batch_sizes == [3, 3, 1, 1]
+
+    asyncio.run(scenario())
+
+
 def test_create_rejects_bad_config(monkeypatch):
     async def scenario():
         engine = make_engine("sqlite+aiosqlite:///:memory:")
@@ -309,6 +388,16 @@ def test_sync_route_accepts_and_returns_202():
     body = started.json()
     assert body["status"] == "syncing"
     assert body["data_source"]["id"] == ds["id"]
+    assert body["data_source"]["active_job_id"] == body["job_id"]
+    duplicate = c.post(f"/v1/knowledge-bases/{kb['id']}/datasources/{ds['id']}/sync")
+    assert duplicate.status_code == 409
+    current = c.get(f"/v1/knowledge-bases/{kb['id']}/datasources/{ds['id']}").json()
+    assert current["sync_job"]["id"] == body["job_id"]
+    assert current["sync_job"]["status"] == "queued"
+    cancelled = c.post(
+        f"/v1/knowledge-bases/{kb['id']}/datasources/{ds['id']}/sync/cancel"
+    )
+    assert cancelled.status_code == 202
     # a disabled source cannot be synced → 400
     c.patch(f"/v1/knowledge-bases/{kb['id']}/datasources/{ds['id']}", json={"enabled": False})
     disabled = c.post(f"/v1/knowledge-bases/{kb['id']}/datasources/{ds['id']}/sync")
