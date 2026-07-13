@@ -197,69 +197,141 @@ class PaiLlm(OpenAILike):
             response_content = ""
             think_tag_added = False
 
-            async for response in completion_response_gen:
-                if is_enable_thinking:
-                    # 尝试从raw对象中获取reasoning_content
-                    reasoning_text = ""
-                    if hasattr(response, "raw") and response.raw:
-                        # raw是ChatCompletionChunk对象
-                        if hasattr(response.raw, "choices") and response.raw.choices:
-                            delta = (
-                                response.raw.choices[0].delta
-                                if response.raw.choices
-                                else None
-                            )
-                            if delta and hasattr(delta, "reasoning_content"):
-                                reasoning_text = delta.reasoning_content or ""
+            try:
+                async for response in completion_response_gen:
+                    if is_enable_thinking:
+                        # 尝试从raw对象中获取reasoning_content
+                        reasoning_text = ""
+                        if hasattr(response, "raw") and response.raw:
+                            # raw是ChatCompletionChunk对象
+                            if hasattr(response.raw, "choices") and response.raw.choices:
+                                delta = (
+                                    response.raw.choices[0].delta
+                                    if response.raw.choices
+                                    else None
+                                )
+                                if delta and hasattr(delta, "reasoning_content"):
+                                    reasoning_text = delta.reasoning_content or ""
 
-                    # 如果有reasoning_content，处理它
-                    if reasoning_text:
-                        if not think_tag_added:
-                            # 第一次遇到reasoning_content，输出<think>标签
+                        # 如果有reasoning_content，处理它
+                        if reasoning_text:
+                            if not think_tag_added:
+                                # 第一次遇到reasoning_content，输出<think>标签
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>",
+                                        additional_kwargs=response.additional_kwargs,
+                                    ),
+                                    delta="<think>",
+                                    raw="<think>",
+                                )
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>\n",
+                                        additional_kwargs=response.additional_kwargs,
+                                    ),
+                                    delta="\n",
+                                    raw="\n",
+                                )
+                                response_content = "<think>\n"
+                                think_tag_added = True
+                                in_reasoning = True
+
+                            # 输出reasoning_content内容（每个片段都要输出）
+                            response_content += reasoning_text
                             yield ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content="<think>",
+                                    content=response_content,
                                     additional_kwargs=response.additional_kwargs,
                                 ),
-                                delta="<think>",
-                                raw="<think>",
+                                delta=reasoning_text,
+                                raw=response.raw,
+                            )
+                            # 继续下一个循环，不处理delta
+                            continue
+
+                        # 检查reasoning是否结束（通过delta内容判断）
+                        if in_reasoning and not reasoning_ended and response.delta:
+                            # 如果有delta内容且之前在reasoning中，说明reasoning结束了
+                            yield ChatResponse(
+                                message=ChatMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content=response_content + "\n</think>",
+                                    additional_kwargs=response.additional_kwargs,
+                                ),
+                                delta="\n</think>",
+                                raw="\n</think>",
                             )
                             yield ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content="<think>\n",
+                                    content=response_content + "\n</think>\n\n",
                                     additional_kwargs=response.additional_kwargs,
                                 ),
-                                delta="\n",
-                                raw="\n",
+                                delta="\n\n",
+                                raw="\n\n",
                             )
-                            response_content = "<think>\n"
-                            think_tag_added = True
-                            in_reasoning = True
+                            response_content += "\n</think>\n\n"
+                            reasoning_ended = True
+                            in_reasoning = False
 
-                        # 输出reasoning_content内容（每个片段都要输出）
-                        response_content += reasoning_text
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role=MessageRole.ASSISTANT,
-                                content=response_content,
-                                additional_kwargs=response.additional_kwargs,
-                            ),
-                            delta=reasoning_text,
-                            raw=response.raw,
-                        )
-                        # 继续下一个循环，不处理delta
-                        continue
+                        # 处理第一个chunk，如果没有reasoning_content但需要添加<think>
+                        if is_first_chunk and response.delta:
+                            if not think_tag_added and not response.text.startswith(
+                                "<think>"
+                            ):
+                                # 没有reasoning_content，但需要补充<think>
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>",
+                                        additional_kwargs=response.additional_kwargs,
+                                    ),
+                                    delta="<think>",
+                                    raw="<think>",
+                                )
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>\n",
+                                        additional_kwargs=response.additional_kwargs,
+                                    ),
+                                    delta="\n",
+                                    raw="\n",
+                                )
+                                response_content = "<think>\n"
+                                think_tag_added = True
+                            is_first_chunk = False
 
-                    # 检查reasoning是否结束（通过delta内容判断）
-                    if in_reasoning and not reasoning_ended and response.delta:
-                        # 如果有delta内容且之前在reasoning中，说明reasoning结束了
+                    # 输出正常的delta内容
+                    response_content += response.delta
+                    yield ChatResponse(
+                        message=ChatMessage(
+                            role=MessageRole.ASSISTANT,
+                            content=response_content,
+                            additional_kwargs=response.additional_kwargs,
+                        ),
+                        delta=response.delta,
+                        raw=response.raw,
+                        additional_kwargs=response.additional_kwargs,
+                    )
+            finally:
+                # 若上游只发送了 reasoning_content 就结束（或异常中断），
+                # 必须补一个 </think> 关闭标签，避免下游客户端看到未闭合
+                # 的 <think> 卡住或解析失败，从而更早断开连接。
+                if in_reasoning and not reasoning_ended:
+                    logger.warning(
+                        "Reasoning stream ended without a trailing delta; "
+                        "emitting synthetic </think> to close the block."
+                    )
+                    try:
                         yield ChatResponse(
                             message=ChatMessage(
                                 role=MessageRole.ASSISTANT,
                                 content=response_content + "\n</think>",
-                                additional_kwargs=response.additional_kwargs,
                             ),
                             delta="\n</think>",
                             raw="\n</think>",
@@ -268,55 +340,14 @@ class PaiLlm(OpenAILike):
                             message=ChatMessage(
                                 role=MessageRole.ASSISTANT,
                                 content=response_content + "\n</think>\n\n",
-                                additional_kwargs=response.additional_kwargs,
                             ),
                             delta="\n\n",
                             raw="\n\n",
                         )
-                        response_content += "\n</think>\n\n"
-                        reasoning_ended = True
-                        in_reasoning = False
-
-                    # 处理第一个chunk，如果没有reasoning_content但需要添加<think>
-                    if is_first_chunk and response.delta:
-                        if not think_tag_added and not response.text.startswith(
-                            "<think>"
-                        ):
-                            # 没有reasoning_content，但需要补充<think>
-                            yield ChatResponse(
-                                message=ChatMessage(
-                                    role=MessageRole.ASSISTANT,
-                                    content="<think>",
-                                    additional_kwargs=response.additional_kwargs,
-                                ),
-                                delta="<think>",
-                                raw="<think>",
-                            )
-                            yield ChatResponse(
-                                message=ChatMessage(
-                                    role=MessageRole.ASSISTANT,
-                                    content="<think>\n",
-                                    additional_kwargs=response.additional_kwargs,
-                                ),
-                                delta="\n",
-                                raw="\n",
-                            )
-                            response_content = "<think>\n"
-                            think_tag_added = True
-                        is_first_chunk = False
-
-                # 输出正常的delta内容
-                response_content += response.delta
-                yield ChatResponse(
-                    message=ChatMessage(
-                        role=MessageRole.ASSISTANT,
-                        content=response_content,
-                        additional_kwargs=response.additional_kwargs,
-                    ),
-                    delta=response.delta,
-                    raw=response.raw,
-                    additional_kwargs=response.additional_kwargs,
-                )
+                    except Exception:
+                        # Consumer already gone / generator being closed —
+                        # nothing meaningful we can do here.
+                        pass
 
         return gen()
 
@@ -346,111 +377,139 @@ class PaiLlm(OpenAILike):
                 response_content = ""
                 think_tag_added = False
 
-                async for response in await self._llm.astream_chat(messages, **kwargs):
-                    # 尝试从raw对象中获取reasoning_content
-                    reasoning_text = ""
-                    if hasattr(response, "raw") and response.raw:
-                        # raw是ChatCompletionChunk对象
-                        if hasattr(response.raw, "choices") and response.raw.choices:
-                            delta = (
-                                response.raw.choices[0].delta
-                                if response.raw.choices
-                                else None
-                            )
-                            if delta and hasattr(delta, "reasoning_content"):
-                                reasoning_text = delta.reasoning_content or ""
+                try:
+                    async for response in await self._llm.astream_chat(messages, **kwargs):
+                        # 尝试从raw对象中获取reasoning_content
+                        reasoning_text = ""
+                        if hasattr(response, "raw") and response.raw:
+                            # raw是ChatCompletionChunk对象
+                            if hasattr(response.raw, "choices") and response.raw.choices:
+                                delta = (
+                                    response.raw.choices[0].delta
+                                    if response.raw.choices
+                                    else None
+                                )
+                                if delta and hasattr(delta, "reasoning_content"):
+                                    reasoning_text = delta.reasoning_content or ""
 
-                    # 如果有reasoning_content，处理它
-                    if reasoning_text:
-                        if not think_tag_added:
-                            # 第一次遇到reasoning_content，输出<think>标签
+                        # 如果有reasoning_content，处理它
+                        if reasoning_text:
+                            if not think_tag_added:
+                                # 第一次遇到reasoning_content，输出<think>标签
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>",
+                                    ),
+                                    delta="<think>",
+                                )
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>\n",
+                                    ),
+                                    delta="\n",
+                                )
+                                response_content = "<think>\n"
+                                think_tag_added = True
+                                in_reasoning = True
+
+                            # 输出reasoning_content内容（每个片段都要输出）
+                            response_content += reasoning_text
                             yield ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content="<think>",
+                                    content=response_content,
+                                    additional_kwargs=response.additional_kwargs,
                                 ),
-                                delta="<think>",
+                                delta=reasoning_text,
+                                raw=response.raw,
+                            )
+                            # 继续下一个循环，不处理delta
+                            continue
+
+                        # 检查reasoning是否结束（通过delta内容判断）
+                        if in_reasoning and not reasoning_ended and response.delta:
+                            # 如果有delta内容且之前在reasoning中，说明reasoning结束了
+                            yield ChatResponse(
+                                message=ChatMessage(
+                                    role=MessageRole.ASSISTANT,
+                                    content=response_content + "\n</think>",
+                                ),
+                                delta="\n</think>",
                             )
                             yield ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content="<think>\n",
+                                    content=response_content + "\n</think>\n\n",
                                 ),
-                                delta="\n",
+                                delta="\n\n",
                             )
-                            response_content = "<think>\n"
-                            think_tag_added = True
-                            in_reasoning = True
+                            response_content += "\n</think>\n\n"
+                            reasoning_ended = True
+                            in_reasoning = False
 
-                        # 输出reasoning_content内容（每个片段都要输出）
-                        response_content += reasoning_text
+                        # 处理第一个chunk，如果没有reasoning_content但需要添加<think>
+                        if is_first_chunk and response.delta:
+                            if not think_tag_added and not response.delta.startswith(
+                                "<think>"
+                            ):
+                                # 没有reasoning_content，但需要补充<think>
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>",
+                                    ),
+                                    delta="<think>",
+                                )
+                                yield ChatResponse(
+                                    message=ChatMessage(
+                                        role=MessageRole.ASSISTANT,
+                                        content="<think>\n",
+                                    ),
+                                    delta="\n",
+                                )
+                                response_content = "<think>\n"
+                                think_tag_added = True
+                            is_first_chunk = False
+
+                        # 输出正常的delta内容
+                        response_content += response.delta
                         yield ChatResponse(
                             message=ChatMessage(
                                 role=MessageRole.ASSISTANT,
                                 content=response_content,
-                                additional_kwargs=response.additional_kwargs,
                             ),
-                            delta=reasoning_text,
-                            raw=response.raw,
+                            delta=response.delta,
+                            additional_kwargs=response.additional_kwargs,
                         )
-                        # 继续下一个循环，不处理delta
-                        continue
-
-                    # 检查reasoning是否结束（通过delta内容判断）
-                    if in_reasoning and not reasoning_ended and response.delta:
-                        # 如果有delta内容且之前在reasoning中，说明reasoning结束了
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role=MessageRole.ASSISTANT,
-                                content=response_content + "\n</think>",
-                            ),
-                            delta="\n</think>",
+                finally:
+                    # 若上游只发送了 reasoning_content 就结束（或异常中断），
+                    # 必须补一个 </think> 关闭标签，避免下游客户端看到未闭合
+                    # 的 <think> 卡住或解析失败，从而更早断开连接。
+                    if in_reasoning and not reasoning_ended:
+                        logger.warning(
+                            "Reasoning chat stream ended without a trailing "
+                            "delta; emitting synthetic </think> to close the "
+                            "block."
                         )
-                        yield ChatResponse(
-                            message=ChatMessage(
-                                role=MessageRole.ASSISTANT,
-                                content=response_content + "\n</think>\n\n",
-                            ),
-                            delta="\n\n",
-                        )
-                        response_content += "\n</think>\n\n"
-                        reasoning_ended = True
-                        in_reasoning = False
-
-                    # 处理第一个chunk，如果没有reasoning_content但需要添加<think>
-                    if is_first_chunk and response.delta:
-                        if not think_tag_added and not response.delta.startswith(
-                            "<think>"
-                        ):
-                            # 没有reasoning_content，但需要补充<think>
+                        try:
                             yield ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content="<think>",
+                                    content=response_content + "\n</think>",
                                 ),
-                                delta="<think>",
+                                delta="\n</think>",
                             )
                             yield ChatResponse(
                                 message=ChatMessage(
                                     role=MessageRole.ASSISTANT,
-                                    content="<think>\n",
+                                    content=response_content + "\n</think>\n\n",
                                 ),
-                                delta="\n",
+                                delta="\n\n",
                             )
-                            response_content = "<think>\n"
-                            think_tag_added = True
-                        is_first_chunk = False
-
-                    # 输出正常的delta内容
-                    response_content += response.delta
-                    yield ChatResponse(
-                        message=ChatMessage(
-                            role=MessageRole.ASSISTANT,
-                            content=response_content,
-                        ),
-                        delta=response.delta,
-                        additional_kwargs=response.additional_kwargs,
-                    )
+                        except Exception:
+                            pass
 
         return gen()
 

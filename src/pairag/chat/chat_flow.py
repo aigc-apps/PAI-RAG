@@ -1,3 +1,4 @@
+import asyncio
 import time
 from typing import (
     Any,
@@ -76,6 +77,15 @@ dispatcher = instrument.get_dispatcher(__name__)
 DEFAULT_GUARDRAIL_RESPONSE = "抱歉，无法处理这个请求。"
 DEFAULT_EMPTY_RESPONSE = "看起来你发了一条空白消息，有什么能帮到你的吗？"
 DEFAULT_ERROR_RESPONSE = "抱歉，系统出错，暂时无法处理这个请求。"
+
+# Wall-clock budgets for the steps that run BEFORE the first SSE byte is
+# flushed. If any of these dependencies hang, the client (behind nginx/ALB)
+# will hit its read timeout and the request shows up as an intermittent 499.
+# On timeout we degrade instead of blocking indefinitely, and always log so
+# ops can spot the slow upstream.
+INTENT_TIMEOUT_S = 8.0
+GUARDRAIL_TIMEOUT_S = 3.0
+RETRIEVAL_TIMEOUT_S = 10.0
 
 
 class ChatFlow:
@@ -392,12 +402,24 @@ class ChatFlow:
         postprocessor = resolve_postprocessor_from_retrieval_settings(
             retrieval_settings=_retrieval_settings
         )
-        nodes = await retriever.aretrieve(query_str)
+        try:
+            async def _run_retrieval() -> List[NodeWithScore]:
+                nodes = await retriever.aretrieve(query_str)
+                return await postprocessor.apostprocess_nodes(
+                    nodes,
+                    query_str=query_str,
+                )
 
-        reranked_nodes = await postprocessor.apostprocess_nodes(
-            nodes,
-            query_str=query_str,
-        )
+            reranked_nodes = await asyncio.wait_for(
+                _run_retrieval(), timeout=RETRIEVAL_TIMEOUT_S
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Retrieval timed out after {RETRIEVAL_TIMEOUT_S}s for "
+                f"knowledgebase={knowledgebase_name!r}, query={query_str!r}. "
+                f"Returning empty nodes."
+            )
+            reranked_nodes = []
         return reranked_nodes
 
     async def _achat_internal(
@@ -422,15 +444,32 @@ class ChatFlow:
 
         original_user_message = chat_request.messages[-1].content
         llm_kwargs = self._get_llm_kwargs(chat_request=chat_request)
-        if chat_request.intent is None:
-            # 意图识别
-            intent_result = await self._recognize_intent(
-                chat_request, chat_history_str=chat_history_str
+        try:
+            if chat_request.intent is None:
+                # 意图识别
+                intent_result = await asyncio.wait_for(
+                    self._recognize_intent(
+                        chat_request, chat_history_str=chat_history_str
+                    ),
+                    timeout=INTENT_TIMEOUT_S,
+                )
+            else:
+                # 直接改写
+                intent_result = await asyncio.wait_for(
+                    self._rewrite_query(
+                        chat_request, chat_history_str=chat_history_str
+                    ),
+                    timeout=INTENT_TIMEOUT_S,
+                )
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"[{chat_id}] Intent recognition timed out after "
+                f"{INTENT_TIMEOUT_S}s, falling back to CHAT_LLM. "
+                f"query={original_user_message!r}"
             )
-        else:
-            # 直接改写
-            intent_result = await self._rewrite_query(
-                chat_request, chat_history_str=chat_history_str
+            intent_result = IntentResult(
+                intent=ChatIntentType.CHAT_LLM,
+                query_str=original_user_message,
             )
 
         logger.info(
@@ -440,15 +479,28 @@ class ChatFlow:
         # 安全护栏
         guardrail = resolve_llm_guardrail(self.config)
         if guardrail is not None:
-            check_result = await guardrail.acheck(text=original_user_message)
-            if check_result.reject:
+            try:
+                check_result = await asyncio.wait_for(
+                    guardrail.acheck(text=original_user_message),
+                    timeout=GUARDRAIL_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    f"[{chat_id}] Guardrail check timed out after "
+                    f"{GUARDRAIL_TIMEOUT_S}s, treating as passed. "
+                    f"query={original_user_message!r}"
+                )
+                check_result = None
+
+            if check_result is not None and check_result.reject:
                 logger.info(f"Guadrail check failed: {original_user_message}.")
                 if chat_request.stream:
                     return response_gen_from_text(check_result.advice)
                 else:
                     return response_from_text(check_result.advice)
 
-            logger.info(f"Guadrail check passed: {original_user_message}.")
+            if check_result is not None:
+                logger.info(f"Guadrail check passed: {original_user_message}.")
 
         # 意图分发
         logger.info(f"Routing query {original_user_message} to {intent_result.intent}")
