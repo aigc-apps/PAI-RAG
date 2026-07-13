@@ -18,6 +18,8 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from loguru import logger
+
 from agent.tools.builtin.knowledge_read import make_knowledge_read_tool
 from agent.tools.builtin.knowledge_find import make_knowledge_find_tool
 from agent.tools.builtin.knowledge_list import make_knowledge_list_tool
@@ -105,6 +107,42 @@ def test_knowledge_read_bad_id_is_friendly():
     assert "knowledge_read" in out and "Traceback" not in out
 
 
+def test_knowledge_read_not_found_redacts_exception_message():
+    sentinel = "SENSITIVE_DOCUMENT_CONTENT_401d"
+
+    class MissingDocumentService:
+        async def fetch_document_or_chunk(self, **kwargs):
+            raise LookupError(f"document contains {sentinel}")
+
+    view = make_knowledge_read_tool(MissingDocumentService())
+    out = _run(ADMIN, lambda: view.fn(document_id="doc_missing"))
+    assert out == "knowledge_read: document or chunk was not found."
+    assert sentinel not in out
+
+
+def test_knowledge_read_failure_redacts_content_from_logs_and_output():
+    sentinel = "SENSITIVE_DOCUMENT_CONTENT_53ba"
+
+    class FailingReadService:
+        async def fetch_document_or_chunk(self, **kwargs):
+            raise RuntimeError(f"parser exposed {sentinel}")
+
+    view = make_knowledge_read_tool(FailingReadService())
+    messages: list[str] = []
+    sink = logger.add(messages.append, format="{message}")
+    try:
+        out = _run(ADMIN, lambda: view.fn(document_id="doc_failure"))
+    finally:
+        logger.remove(sink)
+    assert out == "knowledge_read failed due to an internal error."
+    assert sentinel not in out
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=knowledge_read" in message and "error_type=RuntimeError" in message
+        for message in messages
+    )
+
+
 def test_knowledge_read_requires_an_id():
     svc, kb, doc = _seed()
     view = make_knowledge_read_tool(svc)
@@ -166,6 +204,29 @@ def test_knowledge_find_hides_other_users_private_kb():
     assert "No chunk contains" in out2
 
 
+def test_knowledge_find_failure_redacts_query_from_logs_and_output():
+    sentinel = "SENSITIVE_FIND_QUERY_ba72"
+
+    class FailingFindService:
+        async def grep_chunks(self, **kwargs):
+            raise RuntimeError(f"database rejected {sentinel}")
+
+    grep = make_knowledge_find_tool(FailingFindService())
+    messages: list[str] = []
+    sink = logger.add(messages.append, format="{message}")
+    try:
+        out = _run(ADMIN, lambda: grep.fn(query=sentinel))
+    finally:
+        logger.remove(sink)
+    assert out == "knowledge_find failed due to an internal error."
+    assert sentinel not in out
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=knowledge_find" in message and "error_type=RuntimeError" in message
+        for message in messages
+    )
+
+
 # --------------------------------------------------------------------------- #
 # knowledge_list
 # --------------------------------------------------------------------------- #
@@ -186,6 +247,29 @@ def test_knowledge_list_hides_other_users_private_base():
     # OTHER can't see ADMIN's private base → the friendly "none" message, no leak.
     assert kb.id not in out
     assert "No knowledge bases" in out
+
+
+def test_knowledge_list_failure_redacts_content_from_logs_and_output():
+    sentinel = "SENSITIVE_KB_DESCRIPTION_cd19"
+
+    class FailingListService:
+        async def list_kbs(self, *, user):
+            raise RuntimeError(f"bad knowledge base description {sentinel}")
+
+    tool = make_knowledge_list_tool(FailingListService())
+    messages: list[str] = []
+    sink = logger.add(messages.append, format="{message}")
+    try:
+        out = _run(ADMIN, lambda: tool.fn())
+    finally:
+        logger.remove(sink)
+    assert out == "knowledge_list failed due to an internal error."
+    assert sentinel not in out
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=knowledge_list" in message and "error_type=RuntimeError" in message
+        for message in messages
+    )
 
 
 # --------------------------------------------------------------------------- #

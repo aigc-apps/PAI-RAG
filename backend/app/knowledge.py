@@ -1040,8 +1040,8 @@ class KnowledgeService:
                     query_vector = vecs[0] if vecs else None
                 except Exception as ex:
                     logger.warning(
-                        f"[search] query embedding failed ({ex!r}); "
-                        "engine will fall back"
+                        "operation=query_embedding error_type={} fallback=search_engine",
+                        type(ex).__name__,
                     )
             kwargs = dict(
                 kb_ids=[kb.id for kb in group],
@@ -1064,9 +1064,10 @@ class KnowledgeService:
                     if not self._fallback_to_local:
                         raise
                     logger.warning(
-                        f"[search] primary engine "
-                        f"'{getattr(engine, 'name', '?')}' failed ({ex!r}); "
-                        "falling back to local"
+                        "operation=primary_search engine={} error_type={} "
+                        "fallback=local",
+                        getattr(engine, "name", "?"),
+                        type(ex).__name__,
                     )
                     group_hits, group_total = await self._local.search(**kwargs)
             candidates.extend(group_hits)
@@ -1101,7 +1102,11 @@ class KnowledgeService:
             reranker = self._router.get_reranker(model_id)
             ranked = await reranker.rerank(query, [h.text for h in hits], top_n=top_n)
         except Exception as ex:
-            logger.warning(f"[rerank] '{model_id}' failed ({ex!r}); keeping original order")
+            logger.warning(
+                "operation=rerank model={} error_type={} fallback=original_order",
+                model_id,
+                type(ex).__name__,
+            )
             return hits[:limit]
         if not ranked:
             return hits[:limit]

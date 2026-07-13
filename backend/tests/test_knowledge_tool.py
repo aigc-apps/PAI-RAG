@@ -247,3 +247,35 @@ def test_knowledge_search_empty_and_no_kb_messages():
     no_kb, blank = asyncio.run(scenario())
     assert "No knowledge bases" in no_kb
     assert "non-empty" in blank
+
+
+def test_knowledge_search_failure_redacts_query_from_logs_and_output():
+    sentinel = "SENSITIVE_SEARCH_QUERY_8c31"
+
+    class FailingService:
+        async def list_kbs(self, *, user):
+            raise RuntimeError(f"backend rejected query={sentinel}")
+
+    async def scenario():
+        tool = make_knowledge_search_tool(FailingService())
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}")
+        token = set_current_tool_scope(
+            ToolScope(user_id=ALICE.id, metadata={"role": "user"})
+        )
+        try:
+            output = await tool.fn(query=sentinel)
+        finally:
+            reset_current_tool_scope(token)
+            logger.remove(sink)
+        return output, messages
+
+    output, messages = asyncio.run(scenario())
+    assert output == "knowledge_search failed due to an internal error."
+    assert sentinel not in output
+    assert messages
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=knowledge_search" in message and "error_type=RuntimeError" in message
+        for message in messages
+    )

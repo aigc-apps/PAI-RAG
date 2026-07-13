@@ -15,7 +15,9 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+from loguru import logger
 
+import app.knowledge as knowledge_module
 from app.db import create_all, make_engine
 from app.knowledge import KnowledgeService
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
@@ -210,6 +212,127 @@ def test_multi_kb_search_queries_each_embedding_group_then_reranks_once():
     assert len(reranker.calls) == 1
     assert {hit.kb_id for hit in hits} == {kb_a.id, kb_b.id}
     assert base_scores_descending(hits)
+
+
+def test_query_embedding_fallback_redacts_exception_message(monkeypatch):
+    sentinel = "SENSITIVE_EMBED_QUERY_787e"
+
+    class FailingEmbedder:
+        async def embed(self, texts, *, text_type="document"):
+            raise RuntimeError(f"embedding payload={texts[0]}")
+
+    async def scenario():
+        svc = await _svc()
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content="safe searchable content", uri="d/1"
+        )
+        monkeypatch.setattr(
+            knowledge_module, "build_embedder", lambda config, router: FailingEmbedder()
+        )
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}")
+        try:
+            hits, _ = await svc.search(
+                user=ADMIN, kb_ids=[kb.id], query=sentinel, mode="hybrid"
+            )
+        finally:
+            logger.remove(sink)
+        return hits, messages
+
+    hits, messages = asyncio.run(scenario())
+    assert hits and hits[0].text == "safe searchable content"
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=query_embedding" in message and "error_type=RuntimeError" in message
+        for message in messages
+    )
+
+
+def test_primary_search_fallback_redacts_exception_message():
+    sentinel = "SENSITIVE_PRIMARY_QUERY_a119"
+
+    class FailingPrimarySearch:
+        name = "test-primary"
+
+        async def ensure_index(self, kb):
+            return None
+
+        async def index_chunks(self, kb, doc, chunks):
+            return None
+
+        async def search(self, **kwargs):
+            raise RuntimeError(f"primary payload={kwargs['query']}")
+
+    async def scenario():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        svc = KnowledgeService(
+            engine, search_engine=FailingPrimarySearch(), fallback_to_local=True
+        )
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content=sentinel, uri="d/1"
+        )
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}")
+        try:
+            hits, _ = await svc.search(
+                user=ADMIN, kb_ids=[kb.id], query=sentinel, mode="keyword"
+            )
+        finally:
+            logger.remove(sink)
+        return hits, messages
+
+    hits, messages = asyncio.run(scenario())
+    assert hits and hits[0].text == sentinel
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=primary_search" in message
+        and "engine=test-primary" in message
+        and "error_type=RuntimeError" in message
+        for message in messages
+    )
+
+
+def test_rerank_fallback_redacts_query_and_document_content():
+    sentinel = "SENSITIVE_RERANK_CONTENT_229f"
+
+    class FailingReranker:
+        async def rerank(self, query, documents, *, top_n=None):
+            raise RuntimeError(f"rerank query={query} document={documents[0]}")
+
+    async def scenario():
+        router = _chat_router()
+        router.register_llm("dashscope/rr", FailingReranker())
+        svc = await _svc(router)
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content=sentinel, uri="d/1"
+        )
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}")
+        try:
+            hits, _ = await svc.search(
+                user=ADMIN,
+                kb_ids=[kb.id],
+                query=sentinel,
+                mode="keyword",
+                rerank_config={"enabled": True, "model": "dashscope/rr"},
+            )
+        finally:
+            logger.remove(sink)
+        return hits, messages
+
+    hits, messages = asyncio.run(scenario())
+    assert hits and hits[0].text == sentinel  # original ordering is preserved
+    assert all(sentinel not in message for message in messages)
+    assert any(
+        "operation=rerank" in message
+        and "model=dashscope/rr" in message
+        and "error_type=RuntimeError" in message
+        for message in messages
+    )
 
 
 def base_scores_descending(hits) -> bool:

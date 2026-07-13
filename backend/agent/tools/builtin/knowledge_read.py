@@ -15,10 +15,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from loguru import logger
-
 from agent.tools.base import Tool
-from agent.tools.builtin.knowledge import _scope_user
+from agent.tools.builtin.knowledge import _scope_user, _tool_failure
 
 
 _DEFAULT_MAX_CHARS = 6000
@@ -50,12 +48,12 @@ def make_knowledge_read_tool(knowledge_service) -> Tool:
                 offset=offset,
             )
         except LookupError as ex:
-            return f"knowledge_read: {ex}"
+            _tool_failure("knowledge_read", ex)
+            return "knowledge_read: document or chunk was not found."
         except PermissionError:
             return "knowledge_read: you do not have access to that document."
-        except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"knowledge_read failed: {ex!r}")
-            return f"knowledge_read failed: {ex}"
+        except Exception as ex:  # never surface exception details to the model
+            return _tool_failure("knowledge_read", ex)
 
         text = result.get("text") or ""
         header = [

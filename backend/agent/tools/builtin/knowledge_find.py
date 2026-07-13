@@ -15,10 +15,8 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from loguru import logger
-
 from agent.tools.base import Tool
-from agent.tools.builtin.knowledge import _scope_user
+from agent.tools.builtin.knowledge import _scope_user, _tool_failure
 from agent.tools.scope import scope_default_kb_ids
 
 
@@ -64,9 +62,8 @@ def make_knowledge_find_tool(knowledge_service) -> Tool:
                 document_id=document_id,
                 limit=max(1, min(int(limit or _DEFAULT_LIMIT), 50)),
             )
-        except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"knowledge_find failed: {ex!r}")
-            return f"knowledge_find failed: {ex}"
+        except Exception as ex:  # never surface exception details to the model
+            return _tool_failure("knowledge_find", ex)
 
         if not matches:
             return (

@@ -13,10 +13,8 @@ everyone; admins see all).
 
 from __future__ import annotations
 
-from loguru import logger
-
 from agent.tools.base import Tool
-from agent.tools.builtin.knowledge import _scope_user
+from agent.tools.builtin.knowledge import _scope_user, _tool_failure
 
 
 def make_knowledge_list_tool(knowledge_service) -> Tool:
@@ -26,9 +24,8 @@ def make_knowledge_list_tool(knowledge_service) -> Tool:
         user = _scope_user()
         try:
             kbs = await knowledge_service.list_kbs(user=user)
-        except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"knowledge_list failed: {ex!r}")
-            return f"knowledge_list failed: {ex}"
+        except Exception as ex:  # never surface exception details to the model
+            return _tool_failure("knowledge_list", ex)
 
         if not kbs:
             return (

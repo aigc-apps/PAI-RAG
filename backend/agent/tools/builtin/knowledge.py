@@ -34,6 +34,14 @@ _MAX_SNIPPET_CHARS = 700
 _DEFAULT_TOP_K = 6
 
 
+def _tool_failure(operation: str, ex: Exception) -> str:
+    """Log an exception without its potentially sensitive message or traceback."""
+    logger.warning(
+        "operation={} error_type={}", operation, type(ex).__name__
+    )
+    return f"{operation} failed due to an internal error."
+
+
 def _scope_user():
     """Build a store ``User`` from the active tool scope for permission checks.
 
@@ -147,9 +155,8 @@ def make_knowledge_search_tool(knowledge_service) -> Tool:
                 f"resolved_kb_ids={resolved_kb_ids}"
             )
             return _format(hits, query=query.strip())
-        except Exception as ex:  # never surface a raw traceback to the model
-            logger.warning(f"knowledge_search failed: {ex!r}")
-            return f"knowledge_search failed: {ex}"
+        except Exception as ex:  # never surface exception details to the model
+            return _tool_failure("knowledge_search", ex)
 
     return Tool(
         name="knowledge_search",
