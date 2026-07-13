@@ -228,6 +228,13 @@ class Agent:
         async def gen():
             messages = self.build_messages(ctx)
 
+            # Per-run tool-body store: the budget writes full bodies here as it
+            # offloads results from the window, and it rides the ToolScope so
+            # read_handle can recover them in-run (before they're persisted). A
+            # fresh dict per run keeps nested subagent runs isolated.
+            run_bodies: dict = {}
+            self.budget.run_bodies = run_bodies
+
             yield RunStarted(response_id=getattr(ctx, "response_id", "") or "resp_local")
             usage = Usage()
             for _step in range(self.max_steps):
@@ -285,6 +292,7 @@ class Agent:
                     agent_id=ctx.agent_id,
                     skill_mounts=ctx.skill_mounts,
                     skill_fingerprint=ctx.skill_fingerprint,
+                    run_bodies=run_bodies,
                 )
                 # Parallel fan-out: when the turn has several independent tool calls
                 # and none returns directly (return_direct short-circuits the batch,

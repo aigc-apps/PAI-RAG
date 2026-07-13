@@ -15,6 +15,10 @@ class ToolScope:
     agent_id: str = "main"
     skill_mounts: List[Dict[str, Any]] = field(default_factory=list)
     skill_fingerprint: str = "none"
+    # Per-run map of call_id -> full tool-result body, for results the budget has
+    # offloaded from the window this run (not yet persisted). read_handle reads it
+    # before falling back to the durable store. Set by Agent.run; None elsewhere.
+    run_bodies: Optional[Dict[str, str]] = None
 
     @property
     def is_admin(self) -> bool:

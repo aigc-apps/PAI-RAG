@@ -152,7 +152,7 @@ async def build_context(
         toolbox = registry.build_toolbox(
             _select_tool_names(
                 registry, agent_profile,
-                force=_SKILL_LOADER_TOOLS if skills_active else (),
+                force=(_SKILL_LOADER_TOOLS if skills_active else ()) + _CONTEXT_RECOVERY_TOOLS,
             )
         )
     else:
@@ -289,7 +289,8 @@ def build_subagent_context(
     skills_active = bool(skill_packages and enabled_skill_ids)
 
     tool_names = _select_tool_names(
-        registry, profile, force=_SKILL_LOADER_TOOLS if skills_active else (),
+        registry, profile,
+        force=(_SKILL_LOADER_TOOLS if skills_active else ()) + _CONTEXT_RECOVERY_TOOLS,
     )
     # Depth cap = 1: a subagent never gets the spawn tools, so it cannot nest.
     tool_names = [n for n in tool_names if n not in SPAWN_TOOL_NAMES]
@@ -536,6 +537,11 @@ def _resolve_agent_profile(agent_config, request: ResponsesRequest):
 # include-whitelist or exclude can't strip the tool the catalog tells the model to
 # call. See _select_tool_names(force=...).
 _SKILL_LOADER_TOOLS = ("load_skill", "read_skill_resource")
+
+# read_handle recovers tool results the budget compressor offloaded from the window.
+# It's a system recovery tool: force it past any include-whitelist/exclude so an
+# offloaded placeholder always has a working way to be re-read (when registered).
+_CONTEXT_RECOVERY_TOOLS = ("read_handle",)
 
 
 def _select_tool_names(registry, agent_profile, *, force: Iterable[str] = ()) -> List[str]:

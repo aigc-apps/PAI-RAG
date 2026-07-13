@@ -4,6 +4,7 @@ from loguru import logger
 from memory.utils import estimate_tokens_in_text, truncate, get_tokenizer
 from common.llm.models import DEFAULT_CONTEXT_WINDOW, DEFAULT_MAX_TOKENS
 from agent.tool_result_truncation import smart_truncate
+from agent.context_offload import is_placeholder, make_placeholder
 
 
 TOOL_RESULT_TRUNCATED_MARKER = "\n...[content truncated]"
@@ -108,6 +109,12 @@ class AgentMessageManager:
         # messages are immutable, so without this a turn tokenizes the whole history
         # once per step instead of once. Keyed by (content, tool-calls signature).
         self._token_cache: dict = {}
+        # Per-run tool-result bodies, injected by Agent.run for the duration of a
+        # run. When set, offloading a tool result stashes its full body here so
+        # read_handle can recover it in-run (before it is persisted). None outside
+        # a run (e.g. direct fit_to_budget calls) → offload is still lossless via
+        # the durable store, just without the in-run fast path.
+        self.run_bodies: dict | None = None
         logger.info(
             f"AgentMessageManager initialized: context_window={context_window}, "
             f"max_output={max_output_tokens}, token_budget={self.token_budget}"
@@ -303,15 +310,22 @@ class AgentMessageManager:
             if msg.get("role") != "tool":
                 continue
             content = msg.get("content") or ""
-            if not content:
+            if not content or is_placeholder(content):
                 continue
             current_tokens = _estimate_tokens(content, self.tokenizer)
             if current_tokens <= target_tokens:
                 continue
-            truncated_text, new_tokens = _truncate(
-                content, max_token=target_tokens, tokenizer=self.tokenizer
-            )
-            msg["content"] = truncated_text + TOOL_RESULT_TRUNCATED_MARKER
+            # Offload-not-truncate: keep the full body recoverable (stashed for this
+            # run + already durable in the store) and replace the window copy with a
+            # compact placeholder carrying a read_handle. Losslessly reversible, so
+            # it can reclaim far more than the old head+tail cut without discarding
+            # anything — the model pulls the body back on demand.
+            call_id = msg.get("tool_call_id") or ""
+            if self.run_bodies is not None and call_id:
+                self.run_bodies[call_id] = content
+            placeholder = make_placeholder(call_id, content, current_tokens)
+            msg["content"] = placeholder
+            new_tokens = _estimate_tokens(placeholder, self.tokenizer)
             saved += current_tokens - new_tokens
         group.tokens -= saved
         return saved

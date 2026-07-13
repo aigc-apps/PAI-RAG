@@ -168,6 +168,8 @@ async def lifespan(app: FastAPI):
     # directly, not via rebuild_app_state_from_config, so wire them here too).
     from app.subagent import wire_subagents
     wire_subagents(app.state.app_state)
+    from app.context_tools import wire_context_tools
+    wire_context_tools(app.state.app_state)
     try:
         yield
     finally:

@@ -75,6 +75,26 @@ class SqlStore:
                     ItemRow.conversation_id == conversation_id).order_by(ItemRow.seq))).all()
         return [_to_item(r) for r in rows]
 
+    async def get_tool_result(self, conversation_id: str,
+                              call_id: str) -> Optional[str]:
+        """Full stored output of one ``function_call_output`` — the durable source
+        for ``read_handle`` when a result has been offloaded from the model window.
+        The full body always lives in ``content['output']`` (persistence never caps
+        it), so this recovers it verbatim across runs/workers. Latest match wins."""
+        if not call_id:
+            return None
+        async with AsyncSession(self._engine) as s:
+            rows = (await s.exec(
+                select(ItemRow).where(
+                    ItemRow.conversation_id == conversation_id,
+                    ItemRow.type == "function_call_output",
+                ).order_by(ItemRow.seq))).all()
+        for row in reversed(rows):
+            content = row.content or {}
+            if content.get("call_id") == call_id:
+                return content.get("output")
+        return None
+
     async def save_response(self, response: StoredResponse) -> StoredResponse:
         async with AsyncSession(self._engine) as s:
             s.add(ResponseRow(id=response.id, conversation_id=response.conversation_id,

@@ -120,6 +120,10 @@ def rebuild_app_state_from_config(state: AppState, settings, doc) -> None:
     # a runner over this AppState (needs registry + agent_config, both set above).
     from app.subagent import wire_subagents
     wire_subagents(state)
+    # read_handle recovers tool results the budget offloads from the window; bound
+    # to the store so earlier-run results stay recoverable across stateless workers.
+    from app.context_tools import wire_context_tools
+    wire_context_tools(state)
 
 
 def reload_app_state(state: AppState, settings) -> None:

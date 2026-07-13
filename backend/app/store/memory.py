@@ -34,6 +34,17 @@ class InMemoryStore:
     async def get_conversation_items(self, conversation_id: str) -> List[Item]:
         return list(self._items.get(conversation_id, []))
 
+    async def get_tool_result(self, conversation_id: str,
+                              call_id: str) -> Optional[str]:
+        """Full stored output of one ``function_call_output`` (durable source for
+        ``read_handle``). Latest match wins. Mirrors SqlStore.get_tool_result."""
+        if not call_id:
+            return None
+        for it in reversed(self._items.get(conversation_id, [])):
+            if it.type == "function_call_output" and (it.content or {}).get("call_id") == call_id:
+                return (it.content or {}).get("output")
+        return None
+
     async def save_response(self, response: StoredResponse) -> StoredResponse:
         self._responses[response.id] = response
         return response
