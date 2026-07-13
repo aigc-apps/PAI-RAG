@@ -126,6 +126,9 @@ def create_vector_store(
             text_search_config="jiebacfg",
         )
     elif isinstance(vector_db_connection, HologresConnection):
+        # hologres table name must not start with a digit (unquoted SQL identifier)
+        if table_name[0].isdigit():
+            table_name = "kb" + table_name
         logger.info(
             f"Creating HologresVectorStore for {kb_id} with table name {table_name} with url {vector_db_connection.host}:{vector_db_connection.port}/{vector_db_connection.database}."
         )
