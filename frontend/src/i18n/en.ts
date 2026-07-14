@@ -446,7 +446,6 @@ export const en = {
   "kbview.vectorDim": "Vector dimension",
   "kbview.vectorEngine": "Vector engine",
   "kbview.chunkingLabel": "Chunking",
-  "kbview.retrievalMode": "Retrieval mode",
   // config
   "kbview.configSaved": "Configuration saved",
   "kbview.saveFailed": "Save failed",
@@ -474,7 +473,6 @@ export const en = {
   "kbview.chunkN1": "Chunk N+1",
   "kbview.retrievalDefaults": "Retrieval defaults",
   "kbview.retrievalDefaultsNote": "Initial parameters for recall tests and agent queries.",
-  "kbview.mode": "Mode",
   "kbview.scoreThreshold": "Score threshold",
   "kbview.forceCitation": "Force source citation",
   "kbview.indexAffectingA":
@@ -622,9 +620,9 @@ export const en = {
   "kbview.recallEmptyHintA": "The retrieval tested here uses the same path as the agent ",
   "kbview.recallEmptyHintB": " tool",
   "kbview.noHits": "No hits",
-  "kbview.noHitsHint": "Try loosening the threshold, switching the retrieval mode, or confirm documents are ingested and indexed",
+  "kbview.noHitsHint": "Try loosening the threshold or confirm documents are ingested and indexed",
   "kbview.hitCountA": "Hit ",
-  "kbview.hitCountB": " · showing first {shown} · mode {mode}",
+  "kbview.hitCountB": " · showing first {shown}",
   "kbview.keyword": "Keyword",
   "kbview.finalScore": "Final score",
   // create drawer

@@ -446,7 +446,6 @@ export const zh: Record<keyof typeof en, string> = {
   "kbview.vectorDim": "向量维度",
   "kbview.vectorEngine": "向量引擎",
   "kbview.chunkingLabel": "切片",
-  "kbview.retrievalMode": "检索模式",
   // config
   "kbview.configSaved": "配置已保存",
   "kbview.saveFailed": "保存失败",
@@ -472,7 +471,6 @@ export const zh: Record<keyof typeof en, string> = {
   "kbview.chunkN1": "切片 N+1",
   "kbview.retrievalDefaults": "检索默认值",
   "kbview.retrievalDefaultsNote": "召回测试与智能体查询的初始参数。",
-  "kbview.mode": "模式",
   "kbview.scoreThreshold": "分数阈值",
   "kbview.forceCitation": "强制引用来源",
   "kbview.indexAffectingA": "切片参数已更改，将影响已索引的 {count} 个切片；保存后需 ",
@@ -617,9 +615,9 @@ export const zh: Record<keyof typeof en, string> = {
   "kbview.recallEmptyHintA": "这里测试的检索与智能体 ",
   "kbview.recallEmptyHintB": " 工具走同一路径",
   "kbview.noHits": "无命中结果",
-  "kbview.noHitsHint": "尝试放宽阈值、切换检索模式，或确认文档已入库并索引",
+  "kbview.noHitsHint": "尝试放宽阈值，或确认文档已入库并索引",
   "kbview.hitCountA": "命中 ",
-  "kbview.hitCountB": " 条 · 显示前 {shown} · 模式 {mode}",
+  "kbview.hitCountB": " 条 · 显示前 {shown}",
   "kbview.keyword": "关键词",
   "kbview.finalScore": "最终得分",
   // create drawer

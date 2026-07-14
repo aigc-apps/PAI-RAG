@@ -29,7 +29,6 @@ const parserOf = (kb: KnowledgeBase) => ({
   chunk_overlap: num(kb.default_parser_config?.chunk_overlap, 150),
 });
 const retrievalOf = (kb: KnowledgeBase) => ({
-  mode: (kb.default_retrieval_config?.mode ?? "hybrid") as "hybrid" | "vector" | "keyword",
   top_k: num(kb.default_retrieval_config?.top_k, 10),
   score_threshold: num(kb.default_retrieval_config?.score_threshold, 0),
   force_citation: kb.default_retrieval_config?.force_citation ?? true,
@@ -606,7 +605,7 @@ function OverviewPanel({ kb }: { kb: KnowledgeBase }) {
           </div>
           <div>
             <KV k={t("kbview.chunkingLabel")} v={`${parser.chunk_size} / overlap ${parser.chunk_overlap}`} />
-            <KV k={t("kbview.retrievalMode")} v={`${ret.mode} · top_k ${ret.top_k}`} />
+            <KV k="top_k" v={ret.top_k} />
           </div>
         </div>
       </div>
@@ -623,7 +622,6 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
   const [visibility, setVisibility] = useState(kb.visibility);
   const [chunkSize, setChunkSize] = useState(initParser.chunk_size);
   const [chunkOverlap, setChunkOverlap] = useState(initParser.chunk_overlap);
-  const [mode, setMode] = useState(initRet.mode);
   const [topK, setTopK] = useState(initRet.top_k);
   const [threshold, setThreshold] = useState(initRet.score_threshold);
   const [forceCite, setForceCite] = useState(initRet.force_citation);
@@ -635,14 +633,14 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
   const dirty =
     name !== kb.name || description !== (kb.description ?? "") || visibility !== kb.visibility ||
     chunkSize !== initParser.chunk_size || chunkOverlap !== initParser.chunk_overlap ||
-    mode !== initRet.mode || topK !== initRet.top_k ||
+    topK !== initRet.top_k ||
     threshold !== initRet.score_threshold || forceCite !== initRet.force_citation;
   const indexAffecting = chunkSize !== initParser.chunk_size || chunkOverlap !== initParser.chunk_overlap;
 
   const reset = () => {
     setName(kb.name); setDescription(kb.description ?? ""); setVisibility(kb.visibility);
     setChunkSize(initParser.chunk_size); setChunkOverlap(initParser.chunk_overlap);
-    setMode(initRet.mode); setTopK(initRet.top_k);
+    setTopK(initRet.top_k);
     setThreshold(initRet.score_threshold); setForceCite(initRet.force_citation);
   };
 
@@ -652,7 +650,7 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
       const patch: KnowledgeBasePatch = {
         name, description, visibility,
         default_parser_config: { chunk_size: chunkSize, chunk_overlap: chunkOverlap },
-        default_retrieval_config: { mode, top_k: topK, score_threshold: threshold, force_citation: forceCite },
+        default_retrieval_config: { mode: "hybrid", top_k: topK, score_threshold: threshold, force_citation: forceCite },
       };
       await updateKnowledgeBase(kb.id, patch);
       toast.success(t("kbview.configSaved"));
@@ -730,11 +728,6 @@ function ConfigPanel({ kb, onSaved }: { kb: KnowledgeBase; onSaved: () => Promis
         <h3 className="text-sm font-semibold">{t("kbview.retrievalDefaults")}</h3>
         <p className="mt-0.5 text-xs text-[var(--text-faint)]">{t("kbview.retrievalDefaultsNote")}</p>
         <div className="mt-3 flex flex-wrap items-end gap-5">
-          <Field label={t("kbview.mode")}>
-            <Seg value={mode} onChange={setMode} options={[
-              { value: "hybrid", label: "hybrid" }, { value: "vector", label: "vector" }, { value: "keyword", label: "keyword" },
-            ]} />
-          </Field>
           <div className="w-24"><Field label="top_k">
             <input type="number" className={cn(INPUT, "font-mono")} value={topK}
               onChange={(e) => setTopK(Math.max(1, Number(e.target.value) || 1))} />
@@ -1447,7 +1440,6 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
   const { t } = useI18n();
   const init = retrievalOf(kb);
   const [query, setQuery] = useState("");
-  const [mode, setMode] = useState(init.mode);
   const [topK, setTopK] = useState(init.top_k);
   const [threshold, setThreshold] = useState(init.score_threshold);
   const [tag, setTag] = useState("");
@@ -1460,7 +1452,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
 
   const fetchPage = async (offset: number) => {
     const filters = tag.trim() ? { tags: [tag.trim()] } : {};
-    return searchKnowledge({ kb_ids: [kb.id], query, mode, top_k: topK, offset, score_threshold: threshold, filters });
+    return searchKnowledge({ kb_ids: [kb.id], query, mode: "hybrid", top_k: topK, offset, score_threshold: threshold, filters });
   };
 
   const run = async () => {
@@ -1508,11 +1500,6 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
           </button>
         </div>
         <div className="mt-3.5 flex flex-wrap items-center gap-x-5 gap-y-3 border-t border-[var(--border)] pt-3.5 text-[12.5px] text-[var(--text-muted)]">
-          <span className="flex items-center gap-2">{t("kbview.mode")}
-            <Seg value={mode} onChange={setMode} options={[
-              { value: "hybrid", label: "hybrid" }, { value: "vector", label: "vector" }, { value: "keyword", label: "keyword" },
-            ]} />
-          </span>
           <span className="flex items-center gap-2">top_k
             <input type="number" className={cn(INPUT, "w-16 px-2 py-1 font-mono")} value={topK} onChange={(e) => setTopK(Math.max(1, Number(e.target.value) || 1))} />
           </span>
@@ -1540,7 +1527,7 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
       ) : (
         <>
           <div className="text-[12.5px] text-[var(--text-muted)]">
-            {t("kbview.hitCountA")}<b className="text-[var(--text)]">{total}</b>{t("kbview.hitCountB", { shown: hits.length, mode })}
+            {t("kbview.hitCountA")}<b className="text-[var(--text)]">{total}</b>{t("kbview.hitCountB", { shown: hits.length })}
           </div>
           {hits.map((h, i) => <Hit key={h.chunk_id} hit={h} rank={i + 1} query={lastQuery} />)}
           {hasMore && (

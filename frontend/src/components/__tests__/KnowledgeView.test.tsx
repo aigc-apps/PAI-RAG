@@ -8,11 +8,13 @@ import type { KnowledgeBase } from "../../api/knowledge";
 const listKnowledgeBases = vi.fn();
 const listDataSources = vi.fn();
 const searchKnowledge = vi.fn();
+const updateKnowledgeBase = vi.fn();
 vi.mock("../../api/knowledge", async (importActual) => ({
   ...(await importActual<typeof import("../../api/knowledge")>()),
   listKnowledgeBases: () => listKnowledgeBases(),
   listDataSources: () => listDataSources(),
   searchKnowledge: (...args: unknown[]) => searchKnowledge(...args),
+  updateKnowledgeBase: (...args: unknown[]) => updateKnowledgeBase(...args),
 }));
 
 vi.mock("../../api/models", () => ({
@@ -48,6 +50,8 @@ beforeEach(() => {
   listDataSources.mockReset();
   listDataSources.mockResolvedValue([]);
   searchKnowledge.mockReset();
+  updateKnowledgeBase.mockReset();
+  updateKnowledgeBase.mockResolvedValue(kb);
 });
 
 describe("KnowledgeView routes", () => {
@@ -90,6 +94,9 @@ describe("KnowledgeView routes", () => {
 
   it("shows only the final recall score and no KB rerank controls", async () => {
     useI18nStore.getState().setLang("en");
+    listKnowledgeBases.mockResolvedValue([
+      { ...kb, default_retrieval_config: { mode: "vector" } },
+    ]);
     searchKnowledge.mockResolvedValue({
       data: [{
         kb_id: "kb_1", document_id: "doc_1", chunk_id: "chunk_1",
@@ -113,9 +120,57 @@ describe("KnowledgeView routes", () => {
     expect(screen.getByText("0.876")).toBeInTheDocument();
     expect(screen.queryByText("0.80")).not.toBeInTheDocument();
     expect(screen.queryByText("0.40")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^mode$/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "vector" })).not.toBeInTheDocument();
+    expect(searchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "hybrid" }),
+    );
+    expect(screen.getByText(/showing first 1/i)).toBeInTheDocument();
+    expect(screen.queryByText(/mode vector/i)).not.toBeInTheDocument();
 
     rerender(<KnowledgeView {...props} tab="config" />);
     await waitFor(() => expect(screen.queryByText("Reranker")).not.toBeInTheDocument());
+  });
+
+  it("normalizes stored retrieval mode to hybrid when saving config", async () => {
+    useI18nStore.getState().setLang("en");
+    listKnowledgeBases.mockResolvedValue([
+      {
+        ...kb,
+        default_retrieval_config: {
+          mode: "vector",
+          top_k: 6,
+          score_threshold: 0,
+          force_citation: true,
+        },
+      },
+    ]);
+    render(
+      <KnowledgeView
+        onBack={vi.fn()}
+        kbId="kb_1"
+        tab="config"
+        onOpenKb={vi.fn()}
+        onBackToList={vi.fn()}
+        onTabChange={vi.fn()}
+        onInvalidKb={vi.fn()}
+      />,
+    );
+
+    const topK = await screen.findByLabelText("top_k");
+    await userEvent.clear(topK);
+    await userEvent.type(topK, "8");
+    expect(screen.queryByText(/^mode$/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /save configuration/i }));
+
+    await waitFor(() =>
+      expect(updateKnowledgeBase).toHaveBeenCalledWith(
+        "kb_1",
+        expect.objectContaining({
+          default_retrieval_config: expect.objectContaining({ mode: "hybrid" }),
+        }),
+      ),
+    );
   });
 });
 
