@@ -192,11 +192,12 @@ describe("App", () => {
     });
   });
 
-  it("canonicalizes missing and invalid knowledge tabs", async () => {
+  it("redirects legacy knowledge deep-links to the settings tab", async () => {
     renderApp("/knowledge/kb_1/not-a-tab");
 
     await waitFor(() => {
-      expect(screen.getByTestId("location").textContent).toBe("/knowledge/kb_1/overview");
+      expect(screen.getByTestId("location").textContent).toBe("/settings/knowledge");
     });
+    expect(await screen.findByText("Knowledge manager opened")).toBeInTheDocument();
   });
 });

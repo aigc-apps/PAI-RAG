@@ -32,11 +32,19 @@ import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, BTN_DANGER } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { ConnectionsPanel } from "./ConnectionsPanel";
+import { KnowledgeView, type KnowledgeTab } from "./KnowledgeView";
 import { PageHeader } from "./PageHeader";
 import { useI18n } from "../i18n";
 
-export type SettingsSection = "agents" | "org-persona" | "tools" | "connections" | "skills" | "yaml";
-type TabItem = { id: SettingsSection | "knowledge"; label: string; subtle?: boolean };
+export type SettingsSection =
+  | "agents"
+  | "org-persona"
+  | "tools"
+  | "connections"
+  | "skills"
+  | "knowledge"
+  | "yaml";
+type TabItem = { id: SettingsSection; label: string; subtle?: boolean };
 
 function isControlPlaneCapability(cap: CapabilityConfig) {
   return cap.settings.control_plane === true;
@@ -171,13 +179,11 @@ function applyAgentPatch(
 export function SettingsView({
   doc,
   onBack,
-  onOpenKnowledge,
   initialSection = "agents",
   onSectionChange,
 }: {
   doc: AgentConfigDocument;
   onBack: () => void;
-  onOpenKnowledge?: () => void;
   initialSection?: SettingsSection;
   onSectionChange?: (section: SettingsSection) => void;
 }) {
@@ -320,8 +326,7 @@ export function SettingsView({
                 key={item.id}
                 type="button"
                 onClick={async () => {
-                  if (item.id === "knowledge") onOpenKnowledge?.();
-                  else if (item.id === "yaml" && !yamlText) await openYaml();
+                  if (item.id === "yaml" && !yamlText) await openYaml();
                   else selectSection(item.id);
                 }}
                 className={cn(
@@ -373,6 +378,8 @@ export function SettingsView({
           )}
 
           {tab === "connections" && <ConnectionsPanel doc={doc} />}
+
+          {tab === "knowledge" && <KnowledgeSettingsPanel />}
 
           {tab === "skills" && (
             <SkillsPanel
@@ -474,6 +481,30 @@ export function SettingsView({
         />
       )}
     </div>
+  );
+}
+
+/** Knowledge-base management, inlined into the Settings panel so it behaves like
+ * every other tab (no full-page navigation). KB list ↔ detail and the detail's
+ * sub-tabs are driven by local state — mirroring how the Agents tab keeps its
+ * selected agent and open dialogs local rather than in the URL. */
+function KnowledgeSettingsPanel() {
+  const [kbId, setKbId] = useState<string | undefined>(undefined);
+  const [kbTab, setKbTab] = useState<KnowledgeTab>("overview");
+  return (
+    <KnowledgeView
+      embedded
+      kbId={kbId}
+      tab={kbTab}
+      onOpenKb={(id) => {
+        setKbId(id);
+        setKbTab("overview");
+      }}
+      onBackToList={() => setKbId(undefined)}
+      onTabChange={setKbTab}
+      onInvalidKb={() => setKbId(undefined)}
+      onBack={() => {}}
+    />
   );
 }
 

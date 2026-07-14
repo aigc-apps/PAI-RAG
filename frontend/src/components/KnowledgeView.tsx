@@ -193,6 +193,7 @@ export function KnowledgeView({
   onBackToList,
   onTabChange,
   onInvalidKb,
+  embedded = false,
 }: {
   onBack: () => void;
   kbId?: string;
@@ -201,6 +202,9 @@ export function KnowledgeView({
   onBackToList: () => void;
   onTabChange: (tab: KnowledgeTab) => void;
   onInvalidKb: () => void;
+  /** Render inside the Settings panel: drop the full-page shell + PageHeader,
+   * since Settings already provides its own header and scroll container. */
+  embedded?: boolean;
 }) {
   const { t } = useI18n();
   const [bases, setBases] = useState<KnowledgeBase[]>([]);
@@ -237,20 +241,28 @@ export function KnowledgeView({
         onBackToList={onBackToList}
         onChanged={async () => { await refresh(); }}
         onDeleted={async () => { onBackToList(); await refresh(); }}
+        embedded={embedded}
       />
     );
   }
+
+  const list = (
+    <KbList
+      bases={bases} loading={loading}
+      onOpen={onOpenKb}
+      onCreated={async (id) => { await refresh(); onOpenKb(id); }}
+      onChanged={refresh}
+      embedded={embedded}
+    />
+  );
+
+  if (embedded) return list;
 
   return (
     <div className="workspace-page flex h-full flex-col text-[var(--text)]">
       <TopBar onBack={onBack} crumb={<b className="font-semibold text-[var(--text)]">{t("kb.title")}</b>} />
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
-        <KbList
-          bases={bases} loading={loading}
-          onOpen={onOpenKb}
-          onCreated={async (id) => { await refresh(); onOpenKb(id); }}
-          onChanged={refresh}
-        />
+        {list}
       </div>
     </div>
   );
@@ -264,10 +276,11 @@ function TopBar({ onBack, crumb }: { onBack: () => void; crumb: ReactNode }) {
 // ======================================================================== //
 // List
 // ======================================================================== //
-function KbList({ bases, loading, onOpen, onCreated, onChanged }: {
+function KbList({ bases, loading, onOpen, onCreated, onChanged, embedded }: {
   bases: KnowledgeBase[]; loading: boolean;
   onOpen: (id: string) => void; onCreated: (id: string) => void;
   onChanged: () => Promise<KnowledgeBase[]>;
+  embedded?: boolean;
 }) {
   const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
@@ -285,7 +298,7 @@ function KbList({ bases, loading, onOpen, onCreated, onChanged }: {
   };
 
   return (
-    <div className="workspace-container">
+    <div className={embedded ? "" : "workspace-container"}>
       <div className="mb-7 grid max-w-5xl grid-cols-[minmax(0,1fr)_auto] items-start gap-x-8 gap-y-4 max-sm:grid-cols-1">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold tracking-tight">{t("kb.title")}</h1>
@@ -446,10 +459,11 @@ function Chip({ children, mono }: { children: ReactNode; mono?: boolean }) {
 // ======================================================================== //
 // Detail
 // ======================================================================== //
-function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted }: {
+function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted, embedded }: {
   kb: KnowledgeBase; onBackToList: () => void;
   tab: KnowledgeTab; onTabChange: (tab: KnowledgeTab) => void;
   onChanged: () => Promise<void>; onDeleted: () => Promise<void>;
+  embedded?: boolean;
 }) {
   const { t } = useI18n();
 
@@ -467,43 +481,79 @@ function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted }: 
     catch (e) { toast.error(e instanceof Error ? e.message : t("kbview.deleteFailed")); }
   };
 
+  const crumb = (
+    <>
+      <span className="cursor-pointer hover:text-[var(--text)]" onClick={onBackToList}>{t("kb.title")}</span>
+      <span className="mx-1.5 text-[var(--text-faint)]">/</span>
+      <b className="font-semibold text-[var(--text)]">{kb.name}</b>
+    </>
+  );
+
+  const tabBar = (
+    <div className={cn(
+      "flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-4",
+      !embedded && "bg-[var(--bg-elevated)]/84 backdrop-blur"
+    )}>
+      {tabs.map((tb) => (
+        <button
+          key={tb.id} type="button" onClick={() => onTabChange(tb.id)}
+          className={cn(
+            "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+            tab === tb.id
+              ? "border-[var(--accent)] text-[var(--text)]"
+              : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
+          )}
+        >
+          {tb.label}{typeof tb.badge === "number" && <span className="ml-1 text-[var(--text-faint)]">{tb.badge}</span>}
+        </button>
+      ))}
+      <div className="flex-1" />
+      <button type="button" onClick={remove} className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title={t("kbview.deleteKb")}>
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+
+  const body = (
+    <>
+      {tab === "overview" && <OverviewPanel kb={kb} />}
+      {tab === "config" && <ConfigPanel kb={kb} onSaved={onChanged} />}
+      {tab === "datasources" && <DataSourcePanel kb={kb} onChanged={onChanged} />}
+      {tab === "files" && <FilesPanel kb={kb} onChanged={onChanged} />}
+      {tab === "recall" && <RecallPanel kb={kb} />}
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <div className="text-[var(--text)]">
+        {/* Compact breadcrumb in place of the full-page PageHeader — Settings
+            already renders its own header above the panel. */}
+        <div className="mb-3 flex items-center text-sm text-[var(--text-muted)]">
+          <button
+            type="button"
+            onClick={onBackToList}
+            className="focus-ring -ml-1 mr-1 inline-flex items-center rounded-[var(--radius-sm)] p-1 text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+            aria-label={t("common.back")}
+            title={t("common.back")}
+          >
+            <ChevronDown className="h-4 w-4 rotate-90" />
+          </button>
+          {crumb}
+        </div>
+        <div className="-mx-1">{tabBar}</div>
+        <div className="mt-4">{body}</div>
+      </div>
+    );
+  }
+
   return (
     <div className="workspace-page flex h-full flex-col text-[var(--text)]">
-      <TopBar
-        onBack={onBackToList}
-        crumb={<>
-          <span className="cursor-pointer hover:text-[var(--text)]" onClick={onBackToList}>{t("kb.title")}</span>
-          <span className="mx-1.5 text-[var(--text-faint)]">/</span>
-          <b className="font-semibold text-[var(--text)]">{kb.name}</b>
-        </>}
-      />
-      <div className="flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] bg-[var(--bg-elevated)]/84 px-4 backdrop-blur">
-        {tabs.map((tb) => (
-          <button
-            key={tb.id} type="button" onClick={() => onTabChange(tb.id)}
-            className={cn(
-              "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
-              tab === tb.id
-                ? "border-[var(--accent)] text-[var(--text)]"
-                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
-            )}
-          >
-            {tb.label}{typeof tb.badge === "number" && <span className="ml-1 text-[var(--text-faint)]">{tb.badge}</span>}
-          </button>
-        ))}
-        <div className="flex-1" />
-        <button type="button" onClick={remove} className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title={t("kbview.deleteKb")}>
-          <Trash2 className="h-4 w-4" />
-        </button>
-      </div>
-
+      <TopBar onBack={onBackToList} crumb={crumb} />
+      {tabBar}
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
         <div className="workspace-container">
-          {tab === "overview" && <OverviewPanel kb={kb} />}
-          {tab === "config" && <ConfigPanel kb={kb} onSaved={onChanged} />}
-          {tab === "datasources" && <DataSourcePanel kb={kb} onChanged={onChanged} />}
-          {tab === "files" && <FilesPanel kb={kb} onChanged={onChanged} />}
-          {tab === "recall" && <RecallPanel kb={kb} />}
+          {body}
         </div>
       </div>
     </div>

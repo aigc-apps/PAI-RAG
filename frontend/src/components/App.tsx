@@ -6,7 +6,6 @@ import { Sidebar } from "./Sidebar";
 import { ChatView } from "./ChatView";
 import { SetupWizard } from "./SetupWizard";
 import { SettingsView, type SettingsSection } from "./SettingsView";
-import { KnowledgeView, type KnowledgeTab } from "./KnowledgeView";
 import { UsersView } from "./UsersView";
 import { PreviewPanel } from "./PreviewPanel";
 import { AliyunAuthDialog } from "./AliyunAuthDialog";
@@ -150,6 +149,7 @@ const SETTINGS_SECTIONS = new Set<SettingsSection>([
   "agents",
   "connections",
   "tools",
+  "knowledge",
   "skills",
   "org-persona",
   "yaml",
@@ -168,37 +168,6 @@ function SettingsPage({ doc }: { doc: AgentConfigDocument }) {
       initialSection={activeSection}
       onSectionChange={(next) => navigate(`/settings/${next}`)}
       onBack={() => navigate("/")}
-      onOpenKnowledge={() => navigate("/knowledge")}
-    />
-  );
-}
-
-const KNOWLEDGE_TABS = new Set<KnowledgeTab>([
-  "overview",
-  "config",
-  "datasources",
-  "files",
-  "recall",
-]);
-
-function KnowledgePage() {
-  const { kbId, tab } = useParams();
-  const navigate = useNavigate();
-  if (kbId && (!tab || !KNOWLEDGE_TABS.has(tab as KnowledgeTab))) {
-    return <Navigate to={`/knowledge/${encodeURIComponent(kbId)}/overview`} replace />;
-  }
-  const activeTab = (tab as KnowledgeTab | undefined) ?? "overview";
-  return (
-    <KnowledgeView
-      onBack={() => navigate("/settings/agents")}
-      kbId={kbId}
-      tab={activeTab}
-      onOpenKb={(id) => navigate(`/knowledge/${encodeURIComponent(id)}/overview`)}
-      onBackToList={() => navigate("/knowledge")}
-      onTabChange={(next) => {
-        if (kbId) navigate(`/knowledge/${encodeURIComponent(kbId)}/${next}`);
-      }}
-      onInvalidKb={() => navigate("/knowledge", { replace: true })}
     />
   );
 }
@@ -269,14 +238,10 @@ export function App() {
           ),
         )}
       />
-      <Route
-        path="/knowledge"
-        element={admin(<KnowledgePage />)}
-      />
-      <Route
-        path="/knowledge/:kbId/:tab?"
-        element={admin(<KnowledgePage />)}
-      />
+      {/* Knowledge base management now lives inside Settings; keep the old
+          top-level links working by redirecting to the Settings tab. */}
+      <Route path="/knowledge" element={<Navigate to="/settings/knowledge" replace />} />
+      <Route path="/knowledge/:kbId/:tab?" element={<Navigate to="/settings/knowledge" replace />} />
       <Route path="/users" element={admin(<UsersView onBack={() => navigate("/")} />)} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
