@@ -6,12 +6,37 @@ import { cn } from "../lib/cn";
 import { getToolCallDisplay } from "../lib/toolCallDisplay";
 import { useI18n, type MessageKey } from "../i18n";
 
-function StatusDot({ status }: { status: ToolUse["status"] }) {
+function StatusDot({
+  status,
+  label,
+}: {
+  status: ToolUse["status"];
+  label: string;
+}) {
+  const common = "h-2 w-2 shrink-0 rounded-full";
   if (status === "running")
-    return <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--accent)] pulse-dot" />;
+    return (
+      <span
+        role="img"
+        aria-label={label}
+        className={`${common} bg-[var(--accent)] pulse-dot`}
+      />
+    );
   if (status === "done")
-    return <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--success)]" />;
-  return <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--danger)]" />;
+    return (
+      <span
+        role="img"
+        aria-label={label}
+        className={`${common} bg-[var(--success)]`}
+      />
+    );
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      className={`${common} bg-[var(--danger)]`}
+    />
+  );
 }
 
 function StatusIcon({ status }: { status: ToolUse["status"] }) {
@@ -26,12 +51,6 @@ const STATUS_KEY: Record<ToolUse["status"], MessageKey> = {
   running: "tool.running",
   done: "tool.done",
   error: "tool.error",
-};
-
-const STATUS_TONE: Record<ToolUse["status"], string> = {
-  running: "text-[var(--accent)]",
-  done: "text-[var(--success)]",
-  error: "text-[var(--danger)]",
 };
 
 function formatDuration(ms: number): string {
@@ -60,7 +79,7 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
       )}
     >
       <Collapsible.Trigger className="group flex w-full min-w-0 items-center gap-2 px-3 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]">
-        <StatusDot status={tool.status} />
+        <StatusDot status={tool.status} label={t(STATUS_KEY[tool.status])} />
         {display.labelKey ? (
           <>
             <span className="shrink-0 text-xs font-semibold text-[var(--text)]">
@@ -91,17 +110,17 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
             </span>
           </>
         )}
-        <span className={cn("shrink-0 text-xs font-medium", STATUS_TONE[tool.status])}>
-          {t(STATUS_KEY[tool.status])}
+        <span
+          data-testid="tool-duration"
+          className="ml-auto w-14 shrink-0 text-right font-mono text-xs tabular-nums text-[var(--text-faint)]"
+        >
+          {tool.durationMs != null && tool.status !== "running"
+            ? formatDuration(tool.durationMs)
+            : null}
         </span>
-        {tool.durationMs != null && tool.status !== "running" && (
-          <span className="shrink-0 text-xs text-[var(--text-faint)]">
-            {formatDuration(tool.durationMs)}
-          </span>
-        )}
         <ChevronRight
           className={cn(
-            "h-3.5 w-3.5 ml-auto shrink-0 text-[var(--text-faint)] transition-transform group-hover:text-[var(--text-muted)]",
+            "h-3.5 w-3.5 shrink-0 text-[var(--text-faint)] transition-transform group-hover:text-[var(--text-muted)]",
             open && "rotate-90"
           )}
         />

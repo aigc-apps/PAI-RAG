@@ -19,7 +19,70 @@ describe("ToolCall", () => {
   it("shows an error status", () => {
     render(<ToolCall tool={{ id: "c1", name: "web_fetch", arguments: "{}", status: "error", error: "boom" }} />);
     expect(screen.getByText("(web_fetch)")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "失败" })).toBeInTheDocument();
+    expect(screen.queryByText("失败")).not.toBeInTheDocument();
+    expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("工具执行失败")).toBeInTheDocument();
+    expect(screen.getByText("boom")).toBeInTheDocument();
+  });
+
+  it("uses the localized dot as the only visible completed status", () => {
+    render(
+      <ToolCall
+        tool={{
+          id: "c1",
+          name: "shell",
+          arguments: '{"command":"pwd"}',
+          status: "done",
+          output: "",
+          durationMs: 2100,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "完成" })).toBeInTheDocument();
+    expect(screen.queryByText("完成")).not.toBeInTheDocument();
+  });
+
+  it("aligns duration in a fixed right-side column", () => {
+    render(
+      <ToolCall
+        tool={{
+          id: "c1",
+          name: "shell",
+          arguments: '{"command":"pwd"}',
+          status: "done",
+          output: "",
+          durationMs: 2100,
+        }}
+      />,
+    );
+
+    const duration = screen.getByText("2.1s");
+    expect(duration).toHaveClass(
+      "ml-auto",
+      "w-14",
+      "text-right",
+      "tabular-nums",
+    );
+    expect(duration.nextElementSibling).toHaveClass("lucide-chevron-right");
+  });
+
+  it("keeps an empty duration column for running tools", () => {
+    render(
+      <ToolCall
+        tool={{
+          id: "c1",
+          name: "web_search",
+          arguments: '{"query":"PAI-RAG"}',
+          status: "running",
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "运行中" })).toBeInTheDocument();
+    expect(screen.queryByText("运行中")).not.toBeInTheDocument();
+    expect(screen.getByTestId("tool-duration")).toBeEmptyDOMElement();
   });
 
   it("shows localized name, raw name, and hoverable summary", () => {
