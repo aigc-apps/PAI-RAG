@@ -581,6 +581,9 @@ export const zh: Record<keyof typeof en, string> = {
   "kbview.chunksTitle": "切片 · {title}（{total}）",
   "kbview.chunksTitleFallback": "切片",
   "kbview.noChunks": "暂无切片",
+  "kbview.chunkExpand": "展开全文",
+  "kbview.chunkCollapse": "收起",
+  "kbview.chunkRange": "第 {start}–{end} 字符",
   // import drawer
   "kbview.importAndIndex": "导入并索引",
   "kbview.uploadFile": "上传文件",

@@ -586,6 +586,9 @@ export const en = {
   "kbview.chunksTitle": "Chunks · {title} ({total})",
   "kbview.chunksTitleFallback": "Chunks",
   "kbview.noChunks": "No chunks yet",
+  "kbview.chunkExpand": "Show full text",
+  "kbview.chunkCollapse": "Collapse",
+  "kbview.chunkRange": "chars {start}–{end}",
   // import drawer
   "kbview.importAndIndex": "Import and index",
   "kbview.uploadFile": "Upload file",

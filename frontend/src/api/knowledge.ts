@@ -86,6 +86,10 @@ export interface KnowledgeChunk {
   text: string;
   token_count: number;
   status: string;
+  heading_path?: string[];
+  char_start?: number | null;
+  char_end?: number | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface KnowledgeDataSourceReport {

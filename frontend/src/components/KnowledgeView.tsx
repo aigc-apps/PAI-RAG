@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  BookOpen, Bot, Check, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
+  BookOpen, Bot, Check, ChevronDown, Copy, Database, Eye, Globe, Info, Loader2, Pencil, Plus,
   RefreshCw, Search, Trash2, TriangleAlert, Upload, X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -1250,7 +1250,7 @@ function ChunkDrawer({ kb, doc, onClose }: { kb: KnowledgeBase; doc: KnowledgeDo
               <div className="mb-1 flex justify-between text-[11px] text-[var(--text-muted)]">
                 <span>#{c.chunk_index} · {c.token_count} tokens</span><Pill status={c.status} />
               </div>
-              <p className="text-[13px] leading-relaxed line-clamp-4">{c.text}</p>
+              <ChunkBody text={c.text} headingPath={c.heading_path} charStart={c.char_start} charEnd={c.char_end} />
             </div>
           ))}
           {hasMore && (
@@ -1509,7 +1509,11 @@ function RecallPanel({ kb }: { kb: KnowledgeBase }) {
 
 function Hit({ hit, rank, query }: { hit: KnowledgeHit; rank: number; query: string }) {
   const { t } = useI18n();
-  const chunkIdx = hit.metadata?.chunk_index;
+  const meta = hit.metadata ?? {};
+  const chunkIdx = meta.chunk_index;
+  const headingPath = Array.isArray(meta.heading_path) ? (meta.heading_path as string[]) : undefined;
+  const charStart = typeof meta.char_start === "number" ? meta.char_start : undefined;
+  const charEnd = typeof meta.char_end === "number" ? meta.char_end : undefined;
   return (
     <div className="rounded-[var(--radius)] border border-[var(--border)] bg-[var(--bg-elevated)] p-3.5">
       <div className="flex items-center gap-2.5">
@@ -1523,7 +1527,7 @@ function Hit({ hit, rank, query }: { hit: KnowledgeHit; rank: number; query: str
           <b className="font-mono font-semibold text-[var(--accent)]">{hit.score.toFixed(3)}</b>
         </span>
       </div>
-      <p className="mt-2 text-[13px] leading-relaxed text-[var(--text-muted)] line-clamp-4">{highlight(hit.text, query)}</p>
+      <ChunkBody className="mt-2" text={hit.text} query={query} headingPath={headingPath} charStart={charStart} charEnd={charEnd} />
     </div>
   );
 }
@@ -1607,6 +1611,81 @@ function fmtTime(t: TFunction, iso?: string): string {
   if (diff < 3600) return t("kbview.minutesAgo", { n: Math.floor(diff / 60) });
   if (diff < 86400) return t("kbview.hoursAgo", { n: Math.floor(diff / 3600) });
   return d.toLocaleDateString();
+}
+
+// Collapsed height ≈ 4 lines of 13px text at leading-relaxed (1.625).
+const CHUNK_COLLAPSED_PX = 86;
+
+// Chunk body with progressive disclosure: a masked 4-line preview that expands
+// in place, revealing the heading breadcrumb / source offset and a copy action.
+function ChunkBody({ text, query, headingPath, charStart, charEnd, className }: {
+  text: string;
+  query?: string;
+  headingPath?: string[];
+  charStart?: number | null;
+  charEnd?: number | null;
+  className?: string;
+}) {
+  const { t } = useI18n();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (el) setOverflows(el.scrollHeight > CHUNK_COLLAPSED_PX + 4);
+  }, [text]);
+
+  const copy = async () => {
+    await copyText(text);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1200);
+  };
+
+  const clamped = !expanded && overflows;
+  const showMeta = expanded && ((headingPath?.length ?? 0) > 0 || typeof charStart === "number");
+
+  return (
+    <div className={className}>
+      {showMeta && (
+        <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-[var(--text-faint)]">
+          {headingPath?.length ? <span className="min-w-0 truncate">{headingPath.join(" › ")}</span> : null}
+          {typeof charStart === "number" && (
+            <span className="font-mono">{t("kbview.chunkRange", { start: charStart, end: charEnd ?? charStart })}</span>
+          )}
+        </div>
+      )}
+      <div
+        ref={bodyRef}
+        className="overflow-hidden transition-[max-height] duration-300 ease-out"
+        style={{
+          maxHeight: expanded ? bodyRef.current?.scrollHeight ?? 9999 : CHUNK_COLLAPSED_PX,
+          maskImage: clamped ? "linear-gradient(to bottom, #000 58%, transparent)" : undefined,
+          WebkitMaskImage: clamped ? "linear-gradient(to bottom, #000 58%, transparent)" : undefined,
+        }}
+      >
+        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--text-muted)]">
+          {query ? highlight(text, query) : text}
+        </p>
+      </div>
+      {(overflows || expanded) && (
+        <div className="mt-1.5 flex items-center gap-3.5 text-[11px] text-[var(--text-muted)]">
+          <button
+            className="inline-flex items-center gap-1 transition-colors hover:text-[var(--text)]"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")} />
+            {expanded ? t("kbview.chunkCollapse") : t("kbview.chunkExpand")}
+          </button>
+          <button className="inline-flex items-center gap-1 transition-colors hover:text-[var(--text)]" onClick={copy}>
+            {copied ? <Check className="h-3.5 w-3.5 text-[var(--success)]" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? t("common.copied") : t("common.copy")}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function highlight(text: string, query: string): ReactNode {
