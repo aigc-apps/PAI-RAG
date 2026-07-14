@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import type {
   AgentProfile,
   CapabilityConfig,
+  InstalledSkill,
   AgentConfigDocument,
 } from "../api/agentConfig";
 import { generateCodeManifest, newAgentProfile } from "../api/agentConfig";
@@ -57,19 +58,24 @@ function statusClass(status: string) {
   return "text-[var(--text-faint)]";
 }
 
-function statusLabel(cap: CapabilityConfig) {
+function statusLabel(cap: { status: string }) {
   if (cap.status === "ready") return "Ready";
   if (cap.status === "missing_config") return "Needs setup";
   if (cap.status === "disabled") return "Disabled";
+  if (cap.status === "building_dependencies") return "Building…";
   return "Error";
 }
 
-function skillMeta(skill: CapabilityConfig) {
-  const source = skill.settings.source ? String(skill.settings.source) : "";
-  if (!source) return "";
-  const version = skill.settings.version ? ` · v${String(skill.settings.version)}` : "";
-  const path = skill.settings.path ? ` · ${String(skill.settings.path)}` : "";
-  return `${source}${version}${path}`;
+function skillMeta(skill: InstalledSkill) {
+  const parts: string[] = [];
+  const srcType =
+    skill.source && typeof skill.source === "object"
+      ? String((skill.source as { type?: unknown }).type ?? "")
+      : "";
+  if (srcType) parts.push(srcType);
+  if (skill.version) parts.push(`v${skill.version}`);
+  if (skill.path) parts.push(skill.path);
+  return parts.join(" · ");
 }
 
 function iconFor(id: string) {
@@ -160,7 +166,7 @@ function systemTools(doc: AgentConfigDocument) {
 
 function skillSummary(doc: AgentConfigDocument, agent: AgentProfile) {
   const enabled = new Set(agent.skills.enabled);
-  return doc.capabilities.filter((cap) => cap.kind === "skill" && enabled.has(cap.id));
+  return doc.skills.installed.filter((skill) => enabled.has(skill.id));
 }
 
 function applyAgentPatch(
@@ -193,6 +199,7 @@ export function SettingsView({
   const testSearch = useAgentConfigStore((s) => s.testSearch);
   const uploadSkillZip = useAgentConfigStore((s) => s.uploadSkillZip);
   const installSkill = useAgentConfigStore((s) => s.installSkill);
+  const uninstallSkill = useAgentConfigStore((s) => s.uninstallSkill);
   const loading = useAgentConfigStore((s) => s.loading);
   const [tab, setTab] = useState<SettingsSection>(initialSection);
   const [agentId, setAgentId] = useState(doc.default_agent || doc.agents[0]?.id || "main");
@@ -220,7 +227,7 @@ export function SettingsView({
   const coreTools = doc.capabilities.filter(
     (cap) => cap.kind === "core_tool" && !isControlPlaneCapability(cap)
   );
-  const skills = doc.capabilities.filter((cap) => cap.kind === "skill");
+  const skills = doc.skills.installed;
 
   const saveDoc = async (next: AgentConfigDocument, message = "Could not save") => {
     try {
@@ -394,7 +401,16 @@ export function SettingsView({
               skills={skills}
               loading={loading}
               onInstall={() => setSkillInstallOpen(true)}
-              onPatchCapability={patchCapability}
+              onUninstall={async (skillId) => {
+                try {
+                  await uninstallSkill({ skill_id: skillId, confirm: true });
+                  toast.success(t("settings.skillRemoved"));
+                } catch (err) {
+                  toast.error(
+                    err instanceof Error ? err.message : t("settings.skillRemoveFailed")
+                  );
+                }
+              }}
             />
           )}
 
@@ -684,7 +700,7 @@ function SkillsGrid({
 }: {
   doc: AgentConfigDocument;
   agent: AgentProfile;
-  skills: CapabilityConfig[];
+  skills: InstalledSkill[];
   enabled: Set<string>;
   loading: boolean;
   onToggle: (skillId: string) => void;
@@ -1093,7 +1109,7 @@ function SkillsDialog({
 }: {
   doc: AgentConfigDocument;
   agent: AgentProfile;
-  skills: CapabilityConfig[];
+  skills: InstalledSkill[];
   enabled: Set<string>;
   loading: boolean;
   onToggle: (skillId: string) => void;
@@ -1201,7 +1217,7 @@ function AgentsPanel({
   agents: AgentProfile[];
   setSelectedAgentId: (id: string) => void;
   tools: ReturnType<typeof systemTools>;
-  skills: CapabilityConfig[];
+  skills: InstalledSkill[];
   loading: boolean;
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
   onToggleTool: (toolId: string) => void;
@@ -1597,21 +1613,23 @@ function ToolsPanel({
               </div>
             )}
             <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() =>
-                  void onPatchCapability(cap.id, {
-                    enabled: !cap.enabled,
-                    permission: cap.permission === "admin"
-                      ? "admin"
-                      : cap.enabled ? "disabled" : "auto",
-                  })
-                }
-                className={BTN_GHOST}
-              >
-                {cap.enabled ? "Disable" : "Enable"}
-              </button>
+              {/* Availability is provider/status-driven; the only global lever left
+                  is an explicit off-switch, written as permission (auto↔disabled).
+                  Admin-gated capabilities have no such toggle. */}
+              {cap.permission !== "admin" && (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() =>
+                    void onPatchCapability(cap.id, {
+                      permission: cap.permission === "disabled" ? "auto" : "disabled",
+                    })
+                  }
+                  className={BTN_GHOST}
+                >
+                  {cap.permission === "disabled" ? "Enable" : "Disable"}
+                </button>
+              )}
               {cap.id === "search" && (
                 <button
                   type="button"
@@ -1660,14 +1678,16 @@ function SkillsPanel({
   skills,
   loading,
   onInstall,
-  onPatchCapability,
+  onUninstall,
 }: {
-  skills: CapabilityConfig[];
+  skills: InstalledSkill[];
   loading: boolean;
   onInstall: () => void;
-  onPatchCapability: (id: string, patch: Partial<CapabilityConfig>) => Promise<void>;
+  onUninstall: (skillId: string) => void;
 }) {
   const { t } = useI18n();
+  // Two-step remove confirm, keyed by skill id (mirrors the agent-delete confirm).
+  const [confirmId, setConfirmId] = useState<string | null>(null);
   return (
     <>
       <div className="mb-5 flex items-start justify-between gap-3">
@@ -1690,8 +1710,13 @@ function SkillsPanel({
             key={skill.id}
             className="flex items-start justify-between gap-3 rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)] p-3"
           >
-            <div>
-              <div className="text-sm font-medium">{skill.name}</div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{skill.name}</span>
+                <span className={cn("text-xs", statusClass(skill.status))}>
+                  {statusLabel(skill)}
+                </span>
+              </div>
               <div className="mt-1 text-xs leading-5 text-[var(--text-muted)]">
                 {skill.description}
               </div>
@@ -1706,21 +1731,44 @@ function SkillsPanel({
                 </div>
               )}
             </div>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => void onPatchCapability(skill.id, { enabled: !skill.enabled })}
-              className={cn(
-                "shrink-0 rounded-[var(--radius-sm)] px-3 py-1.5 text-xs",
-                skill.enabled
-                  ? "bg-[var(--surface-2)] text-[var(--text)]"
-                  : "border border-[var(--border)] text-[var(--text-muted)]"
+            <div className="shrink-0">
+              {confirmId === skill.id ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={() => {
+                      onUninstall(skill.id);
+                      setConfirmId(null);
+                    }}
+                    className={cn(BTN_DANGER, "text-xs")}
+                  >
+                    {t("settings.skillRemoveConfirm")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmId(null)}
+                    className={cn(BTN_GHOST, "text-xs")}
+                  >
+                    {t("common.cancel")}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => setConfirmId(skill.id)}
+                  className="rounded-[var(--radius-sm)] border border-[var(--border)] px-3 py-1.5 text-xs text-[var(--danger)] hover:bg-[var(--danger)]/10"
+                >
+                  {t("settings.skillRemove")}
+                </button>
               )}
-            >
-              {skill.enabled ? t("settings.skillInstalled") : t("common.disabled")}
-            </button>
+            </div>
           </div>
         ))}
+        {skills.length === 0 && (
+          <p className="text-xs text-[var(--text-faint)]">{t("settings.skillsEmpty")}</p>
+        )}
       </div>
     </>
   );
@@ -2045,7 +2093,7 @@ function SearchConfigDialog({
       ),
       capabilities: doc.capabilities.map((cap) =>
         cap.id === "search"
-          ? { ...cap, enabled: true, permission: "auto", status: "ready" }
+          ? { ...cap, permission: "auto", status: "ready" }
           : cap
       ),
     };
@@ -2416,7 +2464,7 @@ function SandboxConfigDialog({
       ),
       capabilities: doc.capabilities.map((cap) =>
         cap.id === "sandbox"
-          ? { ...cap, enabled: true, permission: "auto", status: "ready" }
+          ? { ...cap, permission: "auto", status: "ready" }
           : cap
       ),
       agents: doc.agents.map((agent) => ({

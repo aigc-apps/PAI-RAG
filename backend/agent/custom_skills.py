@@ -129,9 +129,21 @@ def _discover_skill_packages_uncached(sources: Iterable[Dict[str, Any]]) -> List
     return packages
 
 
-def skill_sources(skill_config: Any) -> List[Dict[str, Any]]:
-    root = getattr(skill_config, "root", "") or ""
-    return [{"type": "local", "path": root}] if root else []
+def skill_local_root() -> str:
+    """The backend host directory where installed skill packages live, read from
+    the ``SKILL_LOCAL_ROOT`` env var (default ``/mnt/data/skills``). This is a
+    deployment-environment fact, not user configuration, so it is never stored in
+    the config document. It should point at the writable NAS subtree the sandbox
+    mounts read-only at ``/mnt/skills``. Single source of truth for skill
+    discovery and install/uninstall. Mirrors ``Settings.skill_local_root``."""
+    return os.environ.get("SKILL_LOCAL_ROOT") or "/mnt/data/skills"
+
+
+def skill_sources(skill_config: Any = None) -> List[Dict[str, Any]]:
+    """Discovery sources for skill packages. The local root now comes from the
+    environment (see ``skill_local_root``); ``skill_config`` is accepted for
+    call-site compatibility but no longer carries the path."""
+    return [{"type": "local", "path": skill_local_root()}]
 
 
 def resolve_skill_mounts(

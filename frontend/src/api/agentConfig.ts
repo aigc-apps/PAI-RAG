@@ -99,13 +99,30 @@ export interface AgentSkillsConfig {
   enabled: string[];
 }
 
+// One installed skill package. This list — not capabilities — is the source of
+// truth for which skills exist; a skill's per-agent use is `agent.skills.enabled`.
+// `status` gates enablement (only "ready" skills can be enabled for an agent).
+export interface InstalledSkill {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  path: string;
+  status: string;
+  dependency_status: string;
+  source: Record<string, unknown>;
+  dependencies: string[];
+  installed_at: string;
+}
+
 export interface SkillLibraryConfig {
-  root?: string;
+  // NOTE: no `root` — the install path is a deployment env var (SKILL_LOCAL_ROOT),
+  // not stored in config.
   mount?: Record<string, unknown>;
   install?: Record<string, unknown>;
   dependencies?: Record<string, unknown>;
   config?: Record<string, unknown>;
-  installed?: Array<Record<string, unknown>>;
+  installed: InstalledSkill[];
 }
 
 // Per-agent knowledge scoping. `kb_ids` is a soft default: when non-empty the
@@ -207,6 +224,12 @@ export interface SkillInstallResult {
 }
 
 export interface SkillEnableResult {
+  ok: boolean;
+  result: Record<string, unknown>;
+  config: AgentConfigDocument;
+}
+
+export interface SkillUninstallResult {
   ok: boolean;
   result: Record<string, unknown>;
   config: AgentConfigDocument;
@@ -359,6 +382,22 @@ export async function enableSkillForAgent(payload: {
 }): Promise<SkillEnableResult> {
   return jsonOrThrow(
     await apiFetch("/v1/skills/enable", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  );
+}
+
+// Remove an installed skill entirely: deletes its files, drops it from
+// skills.installed, and unassigns it from every agent. Irreversible, so the
+// caller must pass confirm=true (the UI gates this behind a confirmation).
+export async function uninstallSkill(payload: {
+  skill_id: string;
+  confirm: boolean;
+}): Promise<SkillUninstallResult> {
+  return jsonOrThrow(
+    await apiFetch("/v1/skills/uninstall", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

@@ -40,7 +40,7 @@ const modes: Array<{
   },
 ];
 
-function statusLabel(t: TFunction, cap?: CapabilityConfig): string {
+function statusLabel(t: TFunction, cap?: { status: string }): string {
   if (!cap) return t("setup.status.unknown");
   if (cap.status === "ready") return t("setup.status.ready");
   if (cap.status === "missing_config") return t("setup.status.needsSetup");
@@ -108,9 +108,9 @@ export function SetupWizard({
     [doc.providers]
   );
   const llmReady = providers["llm.default"]?.status === "healthy";
-  const enabledSkills = doc.capabilities.filter(
-    (cap) => cap.kind === "skill" && cap.enabled
-  );
+  // Skills are a first-class installed list now (not capabilities); the wizard
+  // previews whatever has been installed for the deployment.
+  const installedSkills = doc.skills.installed;
 
   // Finish is gated on a healthy model (the one required step); the optional
   // capabilities record themselves as skipped so Control Room can prompt later.
@@ -215,7 +215,7 @@ export function SetupWizard({
         <section className={CARD}>
           <h2 className="text-sm font-semibold">{t("setup.recommendedSkills")}</h2>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
-            {enabledSkills.map((skill) => (
+            {installedSkills.map((skill) => (
               <div
                 key={skill.id}
                 className="flex items-center justify-between rounded-[var(--radius-sm)] bg-[var(--surface-2)] px-3 py-2"

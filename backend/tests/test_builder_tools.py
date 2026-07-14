@@ -67,6 +67,26 @@ def test_disabled_knowledge_capability_registers_no_knowledge_tools():
     assert set(KNOWLEDGE_TOOL_NAMES).isdisjoint(reg.names())
 
 
+def test_capability_availability_ignores_deprecated_enabled_flag():
+    # `enabled` is a no-op: availability is driven by permission (+ provider/service).
+    # enabled=False but permission="auto" must still register the knowledge tools.
+    config = types.SimpleNamespace(
+        skills=types.SimpleNamespace(root="/nonexistent"),
+        capabilities=[
+            types.SimpleNamespace(
+                id="knowledge", enabled=False, permission="auto"
+            )
+        ],
+        providers=[],
+    )
+
+    reg = build_default_registry(
+        _Settings(), agent_config=config, knowledge_service=object()
+    )
+
+    assert set(KNOWLEDGE_TOOL_NAMES) <= set(reg.names())
+
+
 def test_profile_include_filters_the_toolbox():
     async def run():
         from app.agent_config import AgentProfile, AgentToolsConfig
@@ -125,16 +145,18 @@ def test_no_registry_means_no_tools():
     asyncio.run(run())
 
 
-def test_load_skill_not_registered_when_no_skill_packages(tmp_path):
-    # skills.root is configured but the dir holds no packages. load_skill must
+def test_load_skill_not_registered_when_no_skill_packages(tmp_path, monkeypatch):
+    # SKILL_LOCAL_ROOT points at an empty dir (no packages). load_skill must
     # NOT be registered — otherwise the model sees the tool with an empty catalog
     # and hallucinates a skill id (e.g. "skill.frontend-design") to call.
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path))
     reg = build_default_registry(_Settings(), agent_config=_agent_config(str(tmp_path)))
     assert "load_skill" not in reg.names()
     assert "read_skill_resource" not in reg.names()
 
 
-def test_load_skill_registered_when_a_skill_package_exists(tmp_path):
+def test_load_skill_registered_when_a_skill_package_exists(tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path))
     skill_dir = tmp_path / "demo"
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(
@@ -146,7 +168,7 @@ def test_load_skill_registered_when_a_skill_package_exists(tmp_path):
     assert "read_skill_resource" not in reg.names()
 
 
-def test_skill_loader_survives_include_whitelist_when_skills_active(tmp_path):
+def test_skill_loader_survives_include_whitelist_when_skills_active(tmp_path, monkeypatch):
     # Regression: an agent that uses an include-whitelist (only its domain tools)
     # AND has an enabled skill must still get load_skill — the injected catalog tells
     # the model to call it, so filtering it out strands the Agent
@@ -155,14 +177,13 @@ def test_skill_loader_survives_include_whitelist_when_skills_active(tmp_path):
     from app.agent_config import AgentProfile, AgentToolsConfig, AgentSkillsConfig
     from agent.custom_skills import discover_skill_packages, skill_sources
 
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path))
     skill_dir = tmp_path / "demo"
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(
         "---\nname: Demo Skill\ndescription: does demo things\n---\nbody\n", encoding="utf-8"
     )
-    sid = discover_skill_packages(
-        skill_sources(types.SimpleNamespace(root=str(tmp_path)))
-    )[0].capability_id
+    sid = discover_skill_packages(skill_sources())[0].capability_id
 
     async def run():
         reg = build_default_registry(_Settings(), agent_config=_agent_config(str(tmp_path)))
@@ -174,9 +195,11 @@ def test_skill_loader_survives_include_whitelist_when_skills_active(tmp_path):
                 skills=AgentSkillsConfig(enabled=[sid]),
             )],
             default_agent="main",
-            capabilities=[types.SimpleNamespace(id=sid, kind="skill", enabled=True, status="ready")],
+            capabilities=[],
             providers=[],
-            skills=types.SimpleNamespace(root=str(tmp_path)),
+            skills=types.SimpleNamespace(
+                installed=[types.SimpleNamespace(id=sid, status="ready")], mount={}
+            ),
         )
         ctx, _ = await build_context(
             ResponsesRequest(model="m", input="hi", agent_id="main"),

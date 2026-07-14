@@ -33,7 +33,7 @@ function docWith(models: ModelCatalogDoc): AgentConfigDocument {
         secret_configured: false,
       },
     },
-    skills: { root: "./data/skills" },
+    skills: { installed: [] },
     default_agent: "main",
     agents: [],
     providers: [],

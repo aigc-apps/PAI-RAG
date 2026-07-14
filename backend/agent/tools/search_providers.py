@@ -89,7 +89,9 @@ def make_search_provider(doc: Optional[AgentConfigDocument]):
     providers = {provider.id: provider for provider in doc.providers}
     search = caps.get("search")
     provider = providers.get("search.default")
-    if search is None or provider is None or not search.enabled:
+    # ``enabled`` is a deprecated no-op; a capability is off only when explicitly
+    # permission="disabled". Provider creation then depends on real settings below.
+    if search is None or provider is None or getattr(search, "permission", "") == "disabled":
         return None
     settings = provider.settings
     provider_name = str(settings.get("provider") or "none").lower()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -15,11 +16,13 @@ from fastapi.responses import JSONResponse, Response
 
 from app.agent_config import (
     AgentConfigDocument,
+    InstalledSkill,
     SetupConfig,
     apply_runtime_status,
     authored_config_dict,
     load_agent_config,
     mask_secrets,
+    remove_installed_skill,
     save_agent_config,
     set_agent_skill_enabled,
 )
@@ -27,6 +30,7 @@ from app.auth import require_admin
 from app.config import get_settings
 from app.deps import AppState, get_state, rebuild_app_state_from_config
 from app.store.base import User
+from agent.custom_skills import _normalize_skill_id, skill_local_root
 from agent.tools.builtin.install_skill import _install_skill_sync
 
 router = APIRouter()
@@ -57,6 +61,13 @@ class SkillEnablePayload(BaseModel):
     skill_id: str
     agent_id: Optional[str] = None
     enabled: bool = True
+
+
+class SkillUninstallPayload(BaseModel):
+    skill_id: str
+    # A destructive, irreversible operation (removes files + drops the record +
+    # unassigns from every agent), so the client must opt in explicitly.
+    confirm: bool = False
 
 
 async def _authored_doc(state: AppState) -> AgentConfigDocument:
@@ -331,7 +342,7 @@ async def install_skill(
         result = await asyncio.to_thread(
             _install_skill_sync,
             payload.source,
-            Path(str(doc.skills.root)).expanduser(),
+            Path(str(getattr(settings, "skill_local_root", "") or skill_local_root())).expanduser(),
             dict(doc.skills.install or {}),
             settings.app_env.lower(),
             payload.overwrite,
@@ -346,18 +357,18 @@ async def install_skill(
 
     installed = [
         item for item in doc.skills.installed
-        if item.get("id") != result.get("id")
+        if item.id != result.get("id")
     ]
-    installed.append({
-        "id": result.get("id"),
-        "name": result.get("name"),
-        "version": result.get("version"),
-        "path": result.get("path"),
-        "status": result.get("status"),
-        "dependency_status": result.get("dependency_status"),
-        "source": result.get("source"),
-        "installed_at": datetime.now(timezone.utc).isoformat(),
-    })
+    installed.append(InstalledSkill(
+        id=str(result.get("id")),
+        name=str(result.get("name") or ""),
+        version=str(result.get("version") or "0.0.0"),
+        path=str(result.get("path") or ""),
+        status=str(result.get("status") or "ready"),
+        dependency_status=str(result.get("dependency_status") or "none"),
+        source=result.get("source") if isinstance(result.get("source"), dict) else {},
+        installed_at=datetime.now(timezone.utc).isoformat(),
+    ))
     doc.skills.installed = installed
     if (
         payload.enable_for_agent
@@ -371,7 +382,7 @@ async def install_skill(
                 agent_id=str(payload.enable_for_agent),
                 skill_id=str(result["id"]),
                 enabled=True,
-                capabilities=runtime.capabilities,
+                installed=runtime.skills.installed,
             )
         except ValueError as exc:
             logger.warning("install: enable_for_agent skipped: {}", exc)
@@ -400,10 +411,64 @@ async def enable_skill_for_agent(
             agent_id=str(target_agent),
             skill_id=payload.skill_id,
             enabled=payload.enabled,
-            capabilities=runtime.capabilities,
+            installed=runtime.skills.installed,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await _save_and_reload(doc, state, updated_by=admin.id)
+    return JSONResponse({
+        "ok": True,
+        "result": result,
+        "config": (await _runtime_doc(state)).model_dump(mode="json"),
+    })
+
+
+@router.post("/v1/skills/uninstall")
+async def uninstall_skill(
+    payload: SkillUninstallPayload,
+    state: AppState = Depends(get_state),
+    admin: User = Depends(require_admin),
+):
+    """Admin-only, confirmation-gated removal of an installed skill: deletes its
+    on-disk package dir (under the local root), drops its ``skills.installed``
+    record, and unassigns it from every agent's ``skills.enabled``."""
+    if not payload.confirm:
+        raise HTTPException(status_code=400, detail="uninstall requires confirm=true")
+    settings = get_settings()
+    doc = await _authored_doc(state)
+    normalized = _normalize_skill_id(payload.skill_id)
+    record = next(
+        (r for r in doc.skills.installed if _normalize_skill_id(r.id) == normalized),
+        None,
+    )
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"skill '{normalized}' is not installed")
+
+    # Remove the on-disk package dir, guarding that the resolved target stays inside
+    # the configured local root (never follow it out via symlinks / traversal).
+    root = Path(str(getattr(settings, "skill_local_root", "") or skill_local_root())).expanduser().resolve()
+    mount_id = normalized.removeprefix("skill.")
+    target = (root / mount_id).resolve()
+    removed_dir = False
+    if target == root or root not in target.parents:
+        logger.warning("uninstall: refusing to remove {} (not strictly inside {})", target, root)
+    elif target.is_dir():
+        try:
+            shutil.rmtree(target)
+            removed_dir = True
+            logger.info("uninstall: removed skill dir {}", target)
+        except Exception as exc:
+            logger.exception("uninstall: failed to remove {}: {}", target, exc)
+            raise HTTPException(status_code=500, detail=f"failed to remove skill files: {exc}") from exc
+    else:
+        logger.info("uninstall: no on-disk dir at {} (record only)", target)
+
+    result = remove_installed_skill(doc, normalized)
+    result["removed_dir"] = removed_dir
+    logger.info(
+        "uninstall: dropped {} (removed_dir={}, unassigned={})",
+        normalized, removed_dir, result["unassigned_agents"],
+    )
     await _save_and_reload(doc, state, updated_by=admin.id)
     return JSONResponse({
         "ok": True,

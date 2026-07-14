@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     files_url_secret: str = ""
     files_nas_local_root: str = ""
     files_max_bytes: int = 25 * 1024 * 1024
+    # Where installed skill packages are written on the backend host (env
+    # SKILL_LOCAL_ROOT). A deployment-environment fact, not user config: the same
+    # config.yaml works everywhere and the path is never persisted in the config
+    # document. This should point at the writable NAS subtree the sandbox mounts
+    # read-only at `/mnt/skills`. Mirrors `custom_skills.skill_local_root()`.
+    skill_local_root: str = "/mnt/data/skills"
     # Aliyun PAI cross-account authorization. `aliyun_authz_secret` is the HMAC
     # key that derives each user's stable ExternalId (feature fails closed when
     # empty). `aliyun_developer_account_id` (env ALIYUN_DEVELOPER_ACCOUNT_ID) is

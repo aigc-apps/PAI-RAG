@@ -9,6 +9,7 @@ import {
   saveAgentConfigYaml,
   saveSetup,
   testSearchProvider,
+  uninstallSkill,
   uploadSkillZip,
   type AgentConfigDocument,
   type SkillInstallSource,
@@ -37,6 +38,10 @@ interface AgentConfigState {
     skill_id: string;
     agent_id?: string;
     enabled?: boolean;
+  }) => Promise<AgentConfigDocument>;
+  uninstallSkill: (payload: {
+    skill_id: string;
+    confirm: boolean;
   }) => Promise<AgentConfigDocument>;
 }
 
@@ -138,6 +143,19 @@ export const useAgentConfigStore = create<AgentConfigState>((set) => ({
       return result.config;
     } catch (err) {
       const error = err instanceof Error ? err.message : "skill enable failed";
+      set({ error, loading: false });
+      throw err;
+    }
+  },
+
+  uninstallSkill: async (payload) => {
+    set({ loading: true, error: undefined });
+    try {
+      const result = await uninstallSkill(payload);
+      set({ doc: result.config, loading: false });
+      return result.config;
+    } catch (err) {
+      const error = err instanceof Error ? err.message : "skill uninstall failed";
       set({ error, loading: false });
       throw err;
     }

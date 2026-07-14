@@ -42,7 +42,7 @@ def make_enable_skill_for_agent_tool(
             agent_id=agent_id,
             skill_id=skill_id,
             enabled=enabled,
-            capabilities=runtime.capabilities,
+            installed=runtime.skills.installed,
         )
         save_agent_config(config_path, doc)
         return result

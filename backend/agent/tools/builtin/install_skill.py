@@ -12,14 +12,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import yaml
+from loguru import logger
 
-from agent.custom_skills import SkillPackage, load_skill_package
+from agent.custom_skills import SkillPackage, load_skill_package, skill_local_root
 from agent.tools.base import Tool
 
 
 def make_install_skill_tool(settings, agent_config) -> Tool:
     skill_config = getattr(agent_config, "skills", None)
-    root = Path(str(getattr(skill_config, "root", "./data/skills"))).expanduser()
+    root = Path(str(getattr(settings, "skill_local_root", "") or skill_local_root())).expanduser()
     install_config = dict(getattr(skill_config, "install", {}) or {})
     upload_root = Path(str(install_config.get("upload_root") or "./data/skill-uploads")).expanduser()
     app_env = str(getattr(settings, "app_env", "development") or "development").lower()
@@ -95,30 +96,51 @@ def _install_skill_sync(
     upload_root: Optional[Path] = None,
 ) -> Dict[str, Any]:
     source_type = str(source.get("type") or "")
+    logger.info(
+        "skill install: start source_type={} root={} app_env={} overwrite={}",
+        source_type, root, app_env, overwrite,
+    )
     _validate_source_allowed(source_type, install_config, app_env)
     root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="skill-install-") as tmp:
         tmp_path = Path(tmp)
-        if source_type == "url":
-            package_dir, source_meta = _prepare_url_source(source, tmp_path, install_config)
-        elif source_type == "git":
-            package_dir, source_meta = _prepare_git_source(source, tmp_path)
-        elif source_type == "zip_upload":
-            package_dir, source_meta = _prepare_zip_upload_source(source, tmp_path, upload_root)
-        else:
-            raise ValueError(f"unsupported skill source type: {source_type}")
+        try:
+            if source_type == "url":
+                package_dir, source_meta = _prepare_url_source(source, tmp_path, install_config)
+            elif source_type == "git":
+                package_dir, source_meta = _prepare_git_source(source, tmp_path)
+            elif source_type == "zip_upload":
+                package_dir, source_meta = _prepare_zip_upload_source(source, tmp_path, upload_root)
+            else:
+                raise ValueError(f"unsupported skill source type: {source_type}")
+            logger.info(
+                "skill install: staged package at {} (source={})", package_dir, source_meta,
+            )
 
-        package = _read_skill_package(package_dir)
-        target_dir = root / package.mount_id
-        if target_dir.exists():
-            if not overwrite:
-                raise FileExistsError(
-                    f"skill '{package.capability_id}' already exists at {target_dir}; set overwrite=true"
-                )
-            shutil.rmtree(target_dir)
-        shutil.copytree(package_dir, target_dir, symlinks=False)
-        dependencies = _dependency_summary(target_dir)
-        status = "building_dependencies" if dependencies["has_dependencies"] else "ready"
+            package = _read_skill_package(package_dir)
+            target_dir = root / package.mount_id
+            logger.info(
+                "skill install: discovered id={} version={} -> target={}",
+                package.capability_id, package.version, target_dir,
+            )
+            if target_dir.exists():
+                if not overwrite:
+                    raise FileExistsError(
+                        f"skill '{package.capability_id}' already exists at {target_dir}; set overwrite=true"
+                    )
+                logger.info("skill install: overwrite=true, removing existing {}", target_dir)
+                shutil.rmtree(target_dir)
+            shutil.copytree(package_dir, target_dir, symlinks=False)
+            file_count = sum(1 for _ in target_dir.rglob("*") if _.is_file())
+            dependencies = _dependency_summary(target_dir)
+            status = "building_dependencies" if dependencies["has_dependencies"] else "ready"
+            logger.info(
+                "skill install: copied {} files to {}; status={} has_dependencies={}",
+                file_count, target_dir, status, dependencies["has_dependencies"],
+            )
+        except Exception as exc:
+            logger.exception("skill install: failed (source_type={}): {}", source_type, exc)
+            raise
         return {
             "id": package.capability_id,
             "name": package.name,

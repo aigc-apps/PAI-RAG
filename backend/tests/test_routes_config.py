@@ -104,6 +104,7 @@ def _client(tmp_path, monkeypatch):
     config_path = str(tmp_path / "config.yaml")
     monkeypatch.setenv("CONFIG_PATH", config_path)
     monkeypatch.setenv("MODELS_PATH", config_path)
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path / "skills"))
     cat = ModelCatalog(
         default_model="local/fast",
         providers=[
@@ -422,7 +423,8 @@ def test_default_instructions_survives_put_config(tmp_path, monkeypatch):
     assert c.get("/v1/config").json()["default_instructions"] == "# House voice\nYou are a research copilot."
 
 
-def test_runtime_status_discovers_local_skill_packages(tmp_path):
+def test_runtime_status_discovers_local_skill_packages(tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path / "skills"))
     skill_dir = tmp_path / "skills" / "review"
     skill_dir.mkdir(parents=True)
     (skill_dir / "skill.yaml").write_text(
@@ -434,19 +436,20 @@ def test_runtime_status_discovers_local_skill_packages(tmp_path):
         encoding="utf-8",
     )
     (skill_dir / "SKILL.md").write_text("Review carefully.", encoding="utf-8")
-    doc = AgentConfigDocument(**{
-        "skills": {"root": str(tmp_path / "skills")}
-    })
+    doc = AgentConfigDocument()
     out = apply_runtime_status(doc, type("Settings", (), {"openai_api_key": "", "default_model": "m", "search_provider": "none", "search_api_key": "", "search_endpoint": ""})(), None)
-    skill = next(cap for cap in out.capabilities if cap.id == "skill.review")
+    # Skills are discovered into skills.installed (not capabilities).
+    skill = next(rec for rec in out.skills.installed if rec.id == "skill.review")
     assert skill.name == "Review Skill"
-    assert skill.settings["source"] == "local"
+    assert skill.source.get("type") == "local"
     assert skill.dependencies == ["knowledge"]
+    assert not any(cap.kind == "skill" for cap in out.capabilities)
 
 
-def test_runtime_status_discovers_skill_md_only_package(tmp_path):
-    """A community SKILL.md-only skill is discovered as a capability, with
+def test_runtime_status_discovers_skill_md_only_package(tmp_path, monkeypatch):
+    """A community SKILL.md-only skill is discovered into skills.installed, with
     dependencies derived from its frontmatter allowed-tools."""
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path / "skills"))
     skill_dir = tmp_path / "skills" / "pdf-form"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
@@ -459,20 +462,19 @@ def test_runtime_status_discovers_skill_md_only_package(tmp_path):
         "---\n\n# PDF Form\n\nExtract fields first.\n",
         encoding="utf-8",
     )
-    doc = AgentConfigDocument(**{
-        "skills": {"root": str(tmp_path / "skills")}
-    })
+    doc = AgentConfigDocument()
     out = apply_runtime_status(doc, type("Settings", (), {"openai_api_key": "", "default_model": "m", "search_provider": "none", "search_api_key": "", "search_endpoint": ""})(), None)
-    skill = next(cap for cap in out.capabilities if cap.id == "skill.pdf-form")
+    skill = next(rec for rec in out.skills.installed if rec.id == "skill.pdf-form")
     assert skill.name == "pdf-form"
-    assert skill.settings["source"] == "local"
-    # allowed-tools [knowledge_search, code_interpreter] -> capability deps [knowledge, sandbox]
+    assert skill.source.get("type") == "local"
+    # allowed-tools [knowledge_search, code_interpreter] -> deps [knowledge, sandbox]
     assert skill.dependencies == ["knowledge", "sandbox"]
 
 
 def _install_demo_skill(c, tmp_path):
     config = yaml.safe_load(c.get("/v1/config.yaml").text)
-    config["skills"]["root"] = str(tmp_path / "skills")
+    # The install root comes from SKILL_LOCAL_ROOT (set by _client to
+    # tmp_path/skills), not from config; only the upload staging dir is authored.
     config["skills"]["install"]["upload_root"] = str(tmp_path / "uploads")
     assert c.put("/v1/config.yaml", json={"yaml": yaml.safe_dump(config, sort_keys=False)}).status_code == 200
     archive = io.BytesIO()
@@ -501,7 +503,7 @@ def _install_demo_skill(c, tmp_path):
     assert install.status_code == 200
     body = install.json()
     assert body["result"]["id"] == "skill.demo"
-    skill = next(cap for cap in body["config"]["capabilities"] if cap["id"] == "skill.demo")
+    skill = next(s for s in body["config"]["skills"]["installed"] if s["id"] == "skill.demo")
     assert skill["name"] == "Demo Skill"
     assert skill["status"] == "ready"
 
@@ -546,6 +548,39 @@ def test_enable_skill_for_agent_endpoint(tmp_path, monkeypatch):
     )
     agent = next(a for a in off.json()["config"]["agents"] if a["id"] == "main")
     assert "skill.demo" not in agent["skills"]["enabled"]
+
+
+def test_uninstall_skill_endpoint(tmp_path, monkeypatch):
+    c = _client(tmp_path, monkeypatch)
+    _install_demo_skill(c, tmp_path)
+    # Enable it for the default agent so we can verify it gets unassigned too.
+    assert c.post("/v1/skills/enable", json={"skill_id": "demo"}).status_code == 200
+    skill_dir = tmp_path / "skills" / "demo"
+    assert skill_dir.is_dir()
+
+    # confirm is mandatory: without it the destructive op is rejected.
+    missing = c.post("/v1/skills/uninstall", json={"skill_id": "skill.demo"})
+    assert missing.status_code == 400
+    assert skill_dir.is_dir()  # nothing removed
+
+    ok = c.post(
+        "/v1/skills/uninstall",
+        json={"skill_id": "demo", "confirm": True},
+    )
+    assert ok.status_code == 200
+    body = ok.json()
+    assert body["result"]["removed_dir"] is True
+    assert "main" in body["result"]["unassigned_agents"]
+    # Record gone, files gone, and no longer enabled on any agent.
+    assert not skill_dir.exists()
+    assert all(s["id"] != "skill.demo" for s in body["config"]["skills"]["installed"])
+    agent = next(a for a in body["config"]["agents"] if a["id"] == "main")
+    assert "skill.demo" not in agent["skills"]["enabled"]
+
+    # Uninstalling an unknown skill is a 404.
+    assert c.post(
+        "/v1/skills/uninstall", json={"skill_id": "skill.nope", "confirm": True}
+    ).status_code == 404
 
 
 def test_config_save_preserves_knowledge_tools(tmp_path, monkeypatch):

@@ -177,7 +177,8 @@ def test_build_context_logs_safe_effective_knowledge_summary():
     asyncio.run(run())
 
 
-def test_build_context_injects_matching_custom_skill(tmp_path):
+def test_build_context_injects_matching_custom_skill(tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path))
     skill_dir = tmp_path / "writer"
     skill_dir.mkdir()
     (skill_dir / "skill.yaml").write_text(
@@ -193,20 +194,13 @@ def test_build_context_injects_matching_custom_skill(tmp_path):
     async def run():
         doc = AgentConfigDocument(**{
             "skills": {
-                "root": str(tmp_path),
                 "mount": {"mount_root": "/mnt/skills"},
+                "installed": [{"id": "skill.writer", "status": "ready"}],
             },
             "agents": [{
                 "id": "main",
                 "name": "Main",
                 "skills": {"enabled": ["skill.writer"]},
-            }],
-            "capabilities": [{
-                "id": "skill.writer",
-                "kind": "skill",
-                "name": "Writer",
-                "enabled": True,
-                "status": "ready",
             }],
         })
         ctx, _ = await build_context(
@@ -233,10 +227,11 @@ def test_build_context_injects_matching_custom_skill(tmp_path):
     asyncio.run(run())
 
 
-def test_build_context_catalogs_skill_md_only_skill_without_query_match(tmp_path):
+def test_build_context_catalogs_skill_md_only_skill_without_query_match(tmp_path, monkeypatch):
     """The bug: a community SKILL.md-only skill (no trigger keywords) was invisible
     to the agent when the query didn't substring-match its English name/desc. The
     always-injected catalog must surface it regardless."""
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path))
     skill_dir = tmp_path / "architecture-diagram"
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(
@@ -247,18 +242,14 @@ def test_build_context_catalogs_skill_md_only_skill_without_query_match(tmp_path
 
     async def run():
         doc = AgentConfigDocument(**{
-            "skills": {"root": str(tmp_path), "mount": {"mount_root": "/mnt/skills"}},
+            "skills": {
+                "mount": {"mount_root": "/mnt/skills"},
+                "installed": [{"id": "skill.architecture-diagram", "status": "ready"}],
+            },
             "agents": [{
                 "id": "main",
                 "name": "Main",
                 "skills": {"enabled": ["skill.architecture-diagram"]},
-            }],
-            "capabilities": [{
-                "id": "skill.architecture-diagram",
-                "kind": "skill",
-                "name": "architecture-diagram",
-                "enabled": True,
-                "status": "ready",
             }],
         })
         # A cross-language query that matches nothing in the skill's English text.

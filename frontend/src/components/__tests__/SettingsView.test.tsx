@@ -37,7 +37,7 @@ const baseDoc: AgentConfigDocument = {
       secret_configured: false,
     },
   },
-  skills: { root: "./data/skills", mount: { mount_root: "/mnt/skills" } },
+  skills: { installed: [], mount: { mount_root: "/mnt/skills" } },
   default_agent: "main",
   agents: [
     {
@@ -194,8 +194,10 @@ describe("SettingsView", () => {
     expect(provider?.settings.wake_path).toBeUndefined();
     expect(provider?.settings.session_idle_seconds).toBe(900);
     expect(provider?.settings.oss_mount_config).toEqual({ mount_points: [] });
-    expect(sandbox?.enabled).toBe(true);
+    // Availability is permission-driven now; `enabled` is a deprecated no-op the
+    // configure dialog no longer writes.
     expect(sandbox?.permission).toBe("auto");
+    expect(sandbox?.status).toBe("ready");
     expect(agent.tools.include).toEqual(
       expect.arrayContaining(["code_interpreter", "shell", "publish_artifact"])
     );
@@ -697,6 +699,73 @@ describe("SettingsView", () => {
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     expect(saved.agents[0].knowledge.kb_ids).toEqual(["kb_a"]);
+  });
+
+  const skillDoc: AgentConfigDocument = {
+    ...baseDoc,
+    skills: {
+      installed: [
+        {
+          id: "skill.demo",
+          name: "Demo Skill",
+          version: "1.2.0",
+          description: "does demo things",
+          path: "/mnt/data/skills/demo",
+          status: "ready",
+          dependency_status: "none",
+          source: { type: "local" },
+          dependencies: [],
+          installed_at: "2026-07-14T00:00:00Z",
+        },
+      ],
+      mount: { mount_root: "/mnt/skills" },
+    },
+  };
+
+  it("renders installed skills from skills.installed[] on the Skills tab", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView doc={skillDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "技能" }));
+
+    expect(screen.getByText("Demo Skill")).toBeInTheDocument();
+    expect(screen.getByText("does demo things")).toBeInTheDocument();
+    // Flat InstalledSkill metadata is surfaced (source · version · path).
+    expect(screen.getByText(/v1\.2\.0/)).toBeInTheDocument();
+    // No global Installed/Disabled toggle any more.
+    expect(screen.queryByRole("button", { name: "已安装" })).not.toBeInTheDocument();
+  });
+
+  it("removes an installed skill via a two-step confirm calling uninstallSkill", async () => {
+    const user = userEvent.setup();
+    const uninstallSkill = vi.fn(async () => skillDoc);
+    useAgentConfigStore.setState({ uninstallSkill });
+
+    render(<SettingsView doc={skillDoc} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "技能" }));
+
+    // First click arms the confirm; nothing removed yet.
+    await user.click(screen.getByRole("button", { name: "移除" }));
+    expect(uninstallSkill).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "确认移除" }));
+    expect(uninstallSkill).toHaveBeenCalledWith({ skill_id: "skill.demo", confirm: true });
+  });
+
+  it("toggles a skill for the selected agent, writing agent.skills.enabled", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={skillDoc} onBack={vi.fn()} />);
+
+    // Per-agent skill selection lives in the agent's Skills dialog.
+    await user.click(screen.getByRole("button", { name: "编辑技能" }));
+    await user.click(screen.getByRole("button", { name: /Demo Skill/ }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].skills.enabled).toEqual(["skill.demo"]);
   });
 
   it("stores rerank policy on the selected agent", async () => {

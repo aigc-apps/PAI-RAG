@@ -8,6 +8,7 @@ from loguru import logger
 
 from agent.context import AgentContext, RunVars
 from agent.custom_skills import (
+    _normalize_skill_id,
     discover_skill_packages,
     render_skill_catalog,
     resolve_skill_mounts,
@@ -368,9 +369,12 @@ def build_subagent_context(
 
 
 def _capability_enabled(agent_config, cap_id: str) -> bool:
+    """A capability is "on" unless explicitly permission="disabled". The old global
+    ``enabled`` boolean is a deprecated no-op; provider presence + per-agent tool
+    selection decide actual use."""
     for cap in (getattr(agent_config, "capabilities", []) or []):
         if getattr(cap, "id", "") == cap_id:
-            return bool(getattr(cap, "enabled", False))
+            return getattr(cap, "permission", "") != "disabled"
     return False
 
 
@@ -605,20 +609,27 @@ def _skill_packages(agent_config) -> list:
 
 
 def _enabled_skill_ids(agent_config, agent_profile) -> List[str]:
+    """The agent's enabled skills that are actually usable: intersect the profile's
+    ``skills.enabled`` with installed skills whose status is ready. Skills live in
+    ``skills.installed`` (no longer capabilities); a skill enabled for the agent but
+    absent from ``installed`` (or not ready) is dropped. When no record exists at all
+    (e.g. a disk-only test fixture), assume ready so mounting still works."""
     if agent_config is None or agent_profile is None:
         return []
-    caps = {
-        cap.id: cap
-        for cap in (getattr(agent_config, "capabilities", []) or [])
-        if getattr(cap, "kind", "") == "skill"
-        and getattr(cap, "enabled", False)
-        and getattr(cap, "status", "ready") in {"ready", "untested"}
-    }
-    return [
-        skill_id
-        for skill_id in getattr(agent_profile.skills, "enabled", [])
-        if skill_id in caps
-    ]
+    installed = getattr(getattr(agent_config, "skills", None), "installed", None) or []
+    status_by_id = {}
+    for rec in installed:
+        rid = rec.get("id") if isinstance(rec, dict) else getattr(rec, "id", None)
+        if not rid:
+            continue
+        status = rec.get("status") if isinstance(rec, dict) else getattr(rec, "status", "ready")
+        status_by_id[_normalize_skill_id(str(rid))] = status
+    result: List[str] = []
+    for skill_id in getattr(agent_profile.skills, "enabled", []) or []:
+        status = status_by_id.get(_normalize_skill_id(str(skill_id)), "ready")
+        if status in {"ready", "untested"}:
+            result.append(skill_id)
+    return result
 
 
 def _active_skill_instructions(*, packages: list, enabled_ids: List[str], current_turn: Message) -> str:

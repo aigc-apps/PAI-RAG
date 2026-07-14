@@ -121,19 +121,23 @@ def _provider_from_settings(settings) -> Optional[SearchProvider]:
 
 
 def _capability_enabled(agent_config, capability_id: str) -> bool:
+    """A capability is available unless explicitly permission="disabled". The old
+    global ``enabled`` boolean is a deprecated no-op — availability is driven by
+    provider presence + permission, and per-agent use by tools.include/exclude."""
     if agent_config is None:
         return False
     for cap in getattr(agent_config, "capabilities", []) or []:
         if cap.id == capability_id:
-            return bool(cap.enabled and cap.permission != "disabled")
+            return getattr(cap, "permission", "") != "disabled"
     return False
 
 
 def _knowledge_capability_available(agent_config) -> bool:
-    """Return false only when the control plane explicitly disables knowledge."""
+    """Return false only when the control plane explicitly disables knowledge
+    (permission="disabled"). A missing capability means "not disabled"."""
     if agent_config is None:
         return True
     for cap in getattr(agent_config, "capabilities", []) or []:
         if cap.id == "knowledge":
-            return bool(cap.enabled and cap.permission != "disabled")
+            return getattr(cap, "permission", "") != "disabled"
     return True

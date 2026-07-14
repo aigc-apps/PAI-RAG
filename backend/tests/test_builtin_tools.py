@@ -1067,21 +1067,22 @@ def test_install_skill_tool_requires_admin(monkeypatch, tmp_path):
     assert len(calls) == 1
 
 
-def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
+def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path, monkeypatch):
     from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
-    from app.agent_config import CapabilityConfig, load_agent_config, save_agent_config
+    from app.agent_config import InstalledSkill, load_agent_config, save_agent_config
 
+    # Isolate discovery from any real /mnt/data/skills on the host.
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path / "skills"))
     config_path = str(tmp_path / "config.yaml")
     settings = type("Settings", (), {"config_path": config_path})()
     reloaded = []
-    # Seed a ready skill enabled on "main" (KB QA is a plain capability, not a
-    # skill, so this test carries its own skill fixture instead of relying on one).
+    # Seed a ready installed skill enabled on "main". Skills live in
+    # skills.installed (not capabilities), so this test carries its own fixture.
     doc = load_agent_config(config_path)
-    doc.capabilities.append(
-        CapabilityConfig(
-            id="skill.custom_qa", kind="skill", name="Custom QA",
-            description="A custom skill fixture.", enabled=True,
-            permission="auto", status="ready",
+    doc.skills.installed.append(
+        InstalledSkill(
+            id="skill.custom_qa", name="Custom QA",
+            description="A custom skill fixture.", status="ready",
         )
     )
     main = next(a for a in doc.agents if a.id == "main")
@@ -1120,22 +1121,21 @@ def test_enable_skill_for_agent_tool_requires_admin_and_persists(tmp_path):
     assert reloaded == [True, True]
 
 
-def test_enable_skill_for_agent_tool_rejects_not_ready_skill(tmp_path):
+def test_enable_skill_for_agent_tool_rejects_not_ready_skill(tmp_path, monkeypatch):
     from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
-    from app.agent_config import CapabilityConfig, load_agent_config, save_agent_config
+    from app.agent_config import InstalledSkill, load_agent_config, save_agent_config
 
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path / "skills"))
     config_path = str(tmp_path / "config.yaml")
     settings = type("Settings", (), {"config_path": config_path})()
     doc = load_agent_config(config_path)
-    doc.capabilities.append(
-        CapabilityConfig(
+    doc.skills.installed.append(
+        InstalledSkill(
             id="skill.custom_analysis",
-            kind="skill",
             name="Custom Analysis",
             description="A custom analysis workflow whose dependency is not ready.",
-            enabled=True,
-            permission="auto",
             status="missing_config",
+            dependency_status="pending_build",
             dependencies=["sandbox"],
         )
     )
@@ -1275,11 +1275,12 @@ def test_load_skill_rejects_skill_not_enabled_for_agent(tmp_path):
     assert "skill.architecture-diagram" in out  # lists what IS available
 
 
-def test_skill_tools_registered_only_when_a_skill_package_exists(tmp_path):
+def test_skill_tools_registered_only_when_a_skill_package_exists(tmp_path, monkeypatch):
     settings = type("S", (), {"search_provider": "none"})()
+    monkeypatch.setenv("SKILL_LOCAL_ROOT", str(tmp_path))
     # A configured-but-empty skills root must NOT expose load_skill — with an
     # empty catalog the model hallucinates a skill id and calls it.
-    empty = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
+    empty = AgentConfigDocument()
     reg = build_default_registry(settings, agent_config=empty)
     assert "load_skill" not in reg.names()
     assert "read_skill_resource" not in reg.names()
@@ -1291,7 +1292,7 @@ def test_skill_tools_registered_only_when_a_skill_package_exists(tmp_path):
         "---\nname: Demo Skill\ndescription: does demo things\n---\nbody\n",
         encoding="utf-8",
     )
-    doc = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
+    doc = AgentConfigDocument()
     reg = build_default_registry(settings, agent_config=doc)
     assert "load_skill" in reg.names()
     assert "read_skill_resource" not in reg.names()

@@ -728,6 +728,11 @@ export const en = {
   "settings.skillRequires": "Requires: {list}",
   "settings.skillNoDependency": "No dependency",
   "settings.skillInstalled": "Installed",
+  "settings.skillsEmpty": "No skills installed yet.",
+  "settings.skillRemove": "Remove",
+  "settings.skillRemoveConfirm": "Confirm remove",
+  "settings.skillRemoved": "Skill removed",
+  "settings.skillRemoveFailed": "Could not remove skill",
   "settings.yamlBody":
     "Advanced raw configuration for agents and shared capabilities. Secrets are masked when loaded from the API.",
   "settings.reloadYaml": "Reload",

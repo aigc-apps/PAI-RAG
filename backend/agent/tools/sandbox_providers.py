@@ -1143,7 +1143,9 @@ def make_sandbox_provider(agent_config) -> Optional[ScopedSandboxProvider]:
         return None
     caps = {cap.id: cap for cap in agent_config.capabilities}
     sandbox = caps.get("sandbox")
-    if sandbox is None or not sandbox.enabled:
+    # ``enabled`` is a deprecated no-op; off only when explicitly permission="disabled".
+    # Whether a provider is actually built depends on the settings checks below.
+    if sandbox is None or getattr(sandbox, "permission", "") == "disabled":
         return None
     providers = {provider.id: provider for provider in agent_config.providers}
     provider = providers.get("sandbox.default")

@@ -63,9 +63,16 @@ class KnowledgeBaseConfig(BaseModel):
 
 class CapabilityConfig(BaseModel):
     id: str
+    # "skill" is retained only so a legacy config.yaml carrying a skill capability
+    # still parses; such entries are dropped on normalization (skills now live in
+    # ``SkillLibraryConfig.installed``). New skills are never written here.
     kind: Literal["core_tool", "skill"]
     name: str
     description: str = ""
+    # DEPRECATED no-op: a capability is no longer globally on/off. Availability is
+    # driven by provider/service presence + ``permission`` (disabled = off) and
+    # per-agent ``tools.include/exclude``. Kept so old configs and the frontend
+    # still parse; not read for gating.
     enabled: bool = False
     permission: Permission = "disabled"
     status: CapabilityStatus = "disabled"
@@ -91,8 +98,29 @@ class AgentSkillsConfig(BaseModel):
     enabled: List[str] = Field(default_factory=list)
 
 
+class InstalledSkill(BaseModel):
+    """One installed skill package. This list — not capabilities — is the source of
+    truth for which skills exist. Per-agent use is ``AgentProfile.skills.enabled``.
+    ``status`` gates enablement (only ``ready`` skills can be enabled for an agent);
+    ``dependencies`` are the core-tool ids the skill needs (e.g. ``sandbox``), shown
+    as "requires …" in the UI."""
+
+    id: str
+    name: str = ""
+    version: str = "0.0.0"
+    description: str = ""
+    path: str = ""
+    status: str = "ready"
+    dependency_status: str = "none"
+    source: Dict[str, Any] = Field(default_factory=dict)
+    dependencies: List[str] = Field(default_factory=list)
+    installed_at: str = ""
+
+
 class SkillLibraryConfig(BaseModel):
-    root: str = "./data/skills"
+    # NOTE: the local install root is NOT stored here — it is a deployment fact read
+    # from the SKILL_LOCAL_ROOT env var (custom_skills.skill_local_root). An older
+    # config carrying `root:` is tolerated and dropped (extra fields are ignored).
     mount: Dict[str, Any] = Field(
         default_factory=lambda: {
             "mount_root": "/mnt/skills",
@@ -120,7 +148,7 @@ class SkillLibraryConfig(BaseModel):
         }
     )
     config: Dict[str, Any] = Field(default_factory=dict)
-    installed: List[Dict[str, Any]] = Field(default_factory=list)
+    installed: List[InstalledSkill] = Field(default_factory=list)
 
 
 class AgentKnowledgeRerankConfig(BaseModel):
@@ -203,7 +231,6 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
         ],
     },
     skills=SkillLibraryConfig(
-        root="./data/skills",
         mount={"mount_root": "/mnt/skills", "nas": {"server_addr": "", "remote_path_prefix": "skills", "read_only": True}},
     ),
     # The admin-editable "Default Persona" template new agents copy at creation.
@@ -428,7 +455,8 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
     # An older config.yaml still carries the entry (and the merge above would re-append
     # it), so drop it here; a subsequent save persists the removal. Forward-only.
     merged["capabilities"] = [
-        c for c in merged["capabilities"] if c.get("id") != "aliyun_pai"
+        c for c in merged["capabilities"]
+        if c.get("id") != "aliyun_pai" and c.get("kind") != "skill"
     ]
     # Embedding/rerank defaults moved into the model catalog and vector DB moved
     # into knowledgebase.vectordb. Older YAMLs can still carry these provider
@@ -498,7 +526,7 @@ def authored_config_dict(doc: AgentConfigDocument) -> Dict[str, Any]:
 
     capabilities = []
     for cap in data.get("capabilities", []) or []:
-        if cap.get("id") == "aliyun_pai":
+        if cap.get("id") == "aliyun_pai" or cap.get("kind") == "skill":
             continue
         item = dict(cap)
         for key in ("status", "error"):
@@ -551,6 +579,12 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
     _merge_discovered_skills(out)
     providers = {p.id: p for p in out.providers}
     caps = {c.id: c for c in out.capabilities}
+
+    def _cap_on(cap) -> bool:
+        # A capability is "off" only when explicitly permission="disabled". The old
+        # global ``enabled`` boolean is a deprecated no-op — availability is driven
+        # by provider/service health + permission, not a separate on/off flag.
+        return cap is not None and getattr(cap, "permission", "") != "disabled"
 
     llm = providers.get("llm.default")
     if llm is not None:
@@ -632,15 +666,23 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
             if provider_name != "none" and search_provider.secret_configured
             else "missing_config"
         )
-        if search_cap is not None and search_cap.enabled:
-            search_cap.status = "ready" if search_provider.status == "healthy" else "missing_config"
-            search_cap.error = None if search_cap.status == "ready" else "Search provider is not configured"
+        if search_cap is not None:
+            if not _cap_on(search_cap):
+                search_cap.status = "disabled"
+                search_cap.error = None
+            else:
+                search_cap.status = "ready" if search_provider.status == "healthy" else "missing_config"
+                search_cap.error = None if search_cap.status == "ready" else "Search provider is not configured"
 
     knowledge = caps.get("knowledge")
     if knowledge is not None:
-        if knowledge.settings.get("mode", "local") == "local":
-            knowledge.status = "ready" if knowledge.enabled else "disabled"
-        elif knowledge.enabled:
+        if not _cap_on(knowledge):
+            knowledge.status = "disabled"
+            knowledge.error = None
+        elif knowledge.settings.get("mode", "local") == "local":
+            knowledge.status = "ready"
+            knowledge.error = None
+        else:
             missing = [
                 ref for ref in knowledge.provider_refs
                 if providers.get(ref) is None or providers[ref].status != "healthy"
@@ -673,8 +715,8 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
                 and _setting_configured(sandbox_settings, "account_id", "account_id_env")
             )
         sandbox_provider.status = (
-            "healthy" if sandbox and sandbox.enabled and configured
-            else "missing_config" if sandbox and sandbox.enabled
+            "healthy" if _cap_on(sandbox) and configured
+            else "missing_config" if _cap_on(sandbox)
             else "untested"
         )
         sandbox_provider.secret_configured = _configured_secret(sandbox_settings)
@@ -682,15 +724,18 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
             "Configure sandbox provider, endpoint/template, and credentials when required"
         )
     if sandbox is not None:
-        sandbox.status = (
-            "ready"
-            if sandbox.enabled and sandbox_provider and sandbox_provider.status == "healthy"
-            else "missing_config" if sandbox.enabled
-            else "disabled"
-        )
-        sandbox.error = None if sandbox.status == "ready" else (
-            sandbox_provider.error if sandbox_provider else "Sandbox provider is not configured"
-        )
+        if not _cap_on(sandbox):
+            sandbox.status = "disabled"
+            sandbox.error = None
+        else:
+            sandbox.status = (
+                "ready"
+                if sandbox_provider and sandbox_provider.status == "healthy"
+                else "missing_config"
+            )
+            sandbox.error = None if sandbox.status == "ready" else (
+                sandbox_provider.error if sandbox_provider else "Sandbox provider is not configured"
+            )
 
     # PAI authorization is gated by ALIYUN_PAI_ENABLED (no capability toggle). Grade
     # the provider so the Settings panel still shows whether the feature is wired.
@@ -716,62 +761,56 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
             "Set ALIYUN_AUTHZ_SECRET, upload the ROS template (ros_template_url), and configure base AK/SK"
         )
 
+    # search / knowledge / sandbox are graded above against their providers. Grade
+    # any remaining capability here: "disabled" only when permission="disabled",
+    # otherwise "ready" (control-plane admin tools have no provider to check). Skills
+    # are no longer capabilities, so there is no skill branch.
     for cap in out.capabilities:
-        if cap.kind != "skill":
-            if not cap.enabled:
-                cap.status = "disabled"
-            elif cap.id in ("install_skill", "enable_skill_for_agent", "subagent"):
-                cap.status = "ready"
-                cap.error = None
+        if cap.id in ("search", "knowledge", "sandbox"):
             continue
-        if not cap.enabled:
+        if not _cap_on(cap):
             cap.status = "disabled"
-            continue
-        missing = [dep for dep in cap.dependencies if caps.get(dep) is None or caps[dep].status != "ready"]
-        cap.status = "missing_config" if missing else "ready"
-        cap.error = f"Requires: {', '.join(missing)}" if missing else None
+            cap.error = None
+        else:
+            cap.status = "ready"
+            cap.error = None
 
     return out
 
 
 def _merge_discovered_skills(doc: AgentConfigDocument) -> None:
-    existing = {cap.id: cap for cap in doc.capabilities}
+    """Reconcile ``doc.skills.installed`` with the skill packages found on disk.
+
+    Adds a record for any package not yet tracked and refreshes presentational
+    fields (name/description/version/path/dependencies) from disk. Install-set
+    status fields (``status``/``dependency_status``) are preserved so a skill that
+    is still building its dependencies (or errored) is not flipped back to
+    ``ready`` on re-discovery. Records are keyed by normalized id (``skill.foo``)."""
+    existing = {_normalize_skill_id(rec.id): rec for rec in doc.skills.installed}
     for package in discover_skill_packages(skill_sources(doc.skills)):
-        cap_id = package.capability_id
-        current = existing.get(cap_id)
+        sid = _normalize_skill_id(package.capability_id)
+        deps = _skill_tool_dependencies(package.permissions)
+        current = existing.get(sid)
         if current is None:
-            doc.capabilities.append(
-                CapabilityConfig(
-                    id=cap_id,
-                    kind="skill",
-                    name=package.name,
-                    description=package.description,
-                    enabled=True,
-                    permission="auto",
-                    status="ready",
-                    dependencies=_skill_tool_dependencies(package.permissions),
-                    settings={
-                        "source": "local",
-                        "path": package.path,
-                        "version": package.version,
-                        "resources": package.resources,
-                        "scripts": package.scripts,
-                        "triggers": package.triggers,
-                    },
-                )
+            record = InstalledSkill(
+                id=package.capability_id,
+                name=package.name,
+                version=package.version,
+                description=package.description,
+                path=package.path,
+                status="ready",
+                dependency_status="none",
+                source={"type": "local"},
+                dependencies=deps,
             )
-            existing[cap_id] = doc.capabilities[-1]
+            doc.skills.installed.append(record)
+            existing[sid] = record
         else:
             current.name = current.name or package.name
-            current.description = current.description or package.description
-            current.settings.update({
-                "source": "local",
-                "path": package.path,
-                "version": package.version,
-                "resources": package.resources,
-                "scripts": package.scripts,
-                "triggers": package.triggers,
-            })
+            current.description = package.description or current.description
+            current.version = package.version or current.version
+            current.path = package.path or current.path
+            current.dependencies = deps or current.dependencies
 
 
 def set_agent_skill_enabled(
@@ -780,33 +819,33 @@ def set_agent_skill_enabled(
     agent_id: str,
     skill_id: str,
     enabled: bool = True,
-    capabilities: Optional[List[CapabilityConfig]] = None,
+    installed: Optional[List[InstalledSkill]] = None,
 ) -> Dict[str, Any]:
     """Enable or disable an installed skill for one agent (pure mutation on ``doc``).
 
-    Validates the agent exists and — when enabling — that the skill capability is
-    present and ``ready``. Pass ``capabilities`` from a runtime doc
-    (``apply_runtime_status`` output) so freshly discovered skills and computed
-    statuses are visible; it defaults to ``doc.capabilities``. The mutation is
-    always applied to ``doc.agents`` regardless of the ``capabilities`` source.
-    Raises ``ValueError`` on an unknown agent/skill or a not-ready skill.
-    Idempotent: re-enabling an already-enabled skill just reports ``changed=False``.
+    Validates the agent exists and — when enabling — that the skill is installed and
+    ``ready``. Pass ``installed`` from a runtime doc (``apply_runtime_status`` output,
+    i.e. ``runtime.skills.installed``) so freshly discovered skills and their computed
+    statuses are visible; it defaults to ``doc.skills.installed``. The mutation is
+    always applied to ``doc.agents`` regardless of the ``installed`` source. Raises
+    ``ValueError`` on an unknown agent/skill or a not-ready skill. Idempotent:
+    re-enabling an already-enabled skill just reports ``changed=False``.
     """
     normalized = _normalize_skill_id(str(skill_id))
     agent = next((item for item in doc.agents if item.id == agent_id), None)
     if agent is None:
         known = ", ".join(item.id for item in doc.agents) or "(none)"
         raise ValueError(f"unknown agent '{agent_id}'; known agents: {known}")
-    caps = capabilities if capabilities is not None else doc.capabilities
-    cap = next(
-        (c for c in caps if c.kind == "skill" and _normalize_skill_id(c.id) == normalized),
+    records = installed if installed is not None else doc.skills.installed
+    record = next(
+        (r for r in records if _normalize_skill_id(r.id) == normalized),
         None,
     )
-    if cap is None:
+    if record is None:
         raise ValueError(f"unknown skill '{normalized}'; install it before enabling")
-    if enabled and cap.status != "ready":
+    if enabled and record.status != "ready":
         raise ValueError(
-            f"skill '{normalized}' is not ready (status={cap.status}); "
+            f"skill '{normalized}' is not ready (status={record.status}); "
             "build dependencies before enabling"
         )
     current = list(agent.skills.enabled)
@@ -823,9 +862,29 @@ def set_agent_skill_enabled(
         "skill_id": normalized,
         "enabled": enabled,
         "changed": changed,
-        "skill_status": cap.status,
+        "skill_status": record.status,
         "agent_enabled_skills": current,
     }
+
+
+def remove_installed_skill(doc: AgentConfigDocument, skill_id: str) -> Dict[str, Any]:
+    """Drop an installed skill record from ``doc.skills.installed`` and unassign it
+    from every agent's ``skills.enabled`` (pure mutation; does NOT touch the
+    filesystem — the caller removes the on-disk package dir). Returns
+    ``{skill_id, existed, unassigned_agents}``. Idempotent."""
+    normalized = _normalize_skill_id(str(skill_id))
+    existed = any(_normalize_skill_id(r.id) == normalized for r in doc.skills.installed)
+    doc.skills.installed = [
+        r for r in doc.skills.installed if _normalize_skill_id(r.id) != normalized
+    ]
+    unassigned: List[str] = []
+    for agent in doc.agents:
+        if any(_normalize_skill_id(s) == normalized for s in agent.skills.enabled):
+            agent.skills.enabled = [
+                s for s in agent.skills.enabled if _normalize_skill_id(s) != normalized
+            ]
+            unassigned.append(agent.id)
+    return {"skill_id": normalized, "existed": existed, "unassigned_agents": unassigned}
 
 
 def _skill_tool_dependencies(permissions: Dict[str, Any]) -> List[str]:

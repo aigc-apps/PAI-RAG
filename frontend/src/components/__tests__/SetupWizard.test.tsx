@@ -27,7 +27,7 @@ function docWithLlm(status: ProviderStatus, defaultModel = "dashscope/qwen-max")
         secret_configured: false,
       },
     },
-    skills: { root: "./data/skills" },
+    skills: { installed: [] },
     default_agent: "main",
     agents: [],
     providers: [
