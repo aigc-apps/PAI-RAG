@@ -45,8 +45,8 @@ class SubagentResult:
 
 
 # ---- Built-in "explore" worker ------------------------------------------------
-# A read-only research subagent tuned for the headline scenario: code exploration
-# and knowledge-base search. Synthesised at call time (never stored in config) so
+# A read-only research subagent tuned for knowledge-base and web exploration.
+# Synthesised at call time (never stored in config) so
 # operators get it for free. `include` is intersected with whatever tools are
 # actually registered, so a missing sandbox/KB just drops the relevant tools.
 _EXPLORE_INSTRUCTIONS = """\
@@ -65,12 +65,8 @@ internal document_id or chunk_id. Use knowledge_find for exact identifiers, erro
 codes, API names, or literal phrases. For each knowledge-base citation, always show \
 the document title; add an accessible HTTP or HTTPS URL when present, otherwise show \
 the title only; never expose internal document_id or chunk_id to the user.
-- For questions about how this system's own code behaves, if the knowledge base comes \
-up short and a read-only code layer is available at /opt/code, explore it with the \
-shell tool (ripgrep/grep to find symbols, cat/sed to read files) and cite file paths \
-with line ranges.
 - Use web_search / web_fetch only for current or external facts the knowledge base and \
-code cannot answer.
+available context cannot answer.
 
 Report the answer with its evidence, and say plainly when something could not be found."""
 
@@ -84,7 +80,7 @@ def _explore_profile() -> AgentProfile:
     return AgentProfile(
         id="explore",
         name="Explore",
-        description="Built-in read-only research worker: knowledge base + code + web.",
+        description="Built-in read-only research worker: knowledge base + web.",
         instructions=_EXPLORE_INSTRUCTIONS,
         tools=AgentToolsConfig(include=list(_EXPLORE_TOOLS)),
         settings={"max_steps": SUBAGENT_MAX_STEPS},

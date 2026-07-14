@@ -778,7 +778,7 @@ function OrgPersonaPanel({
 /** Per-agent code-repository manifest editor. Local state (keyed on agent id by
  * the parent, so it resets on switch) avoids a whole-document PUT per keystroke —
  * it commits on blur and after an AI generation. The "generate" button drives the
- * backend to explore /mnt/code with the LLM and returns Markdown for review. */
+ * backend to explore /opt/code with the LLM and returns Markdown for review. */
 function CodeManifestSection({
   doc,
   agent,
@@ -791,13 +791,15 @@ function CodeManifestSection({
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [value, setValue] = useState(agent.code_manifest ?? "");
+  const [value, setValue] = useState(agent.code.manifest ?? "");
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
 
   const commit = (next: string) => {
-    if (next !== (agent.code_manifest ?? "")) {
-      void onSave(applyAgentPatch(doc, agent.id, { code_manifest: next }));
+    if (next !== (agent.code.manifest ?? "")) {
+      void onSave(applyAgentPatch(doc, agent.id, {
+        code: { ...agent.code, manifest: next },
+      }));
     }
   };
 
@@ -837,7 +839,7 @@ function CodeManifestSection({
         </button>
       </div>
       <p className="mb-2 text-xs text-[var(--text-muted)]">
-        {t("settings.manifestDescA")}<code>/mnt/code</code>{t("settings.manifestDescB")}
+        {t("settings.manifestDescA")}<code>/opt/code</code>{t("settings.manifestDescB")}
       </p>
       <textarea
         value={value}
@@ -1015,8 +1017,8 @@ function KnowledgeSection({
   );
 }
 
-/** Tools editor dialog: the per-agent tool grid + (when code browsing is on) the
- * code-repository manifest, which belongs with tools. Toggles persist immediately. */
+/** Tools editor dialog: the per-agent tool grid plus explicit Agent code access.
+ * Tool availability and repository access are separate, persisted decisions. */
 function ToolsDialog({
   doc,
   agent,
@@ -1036,12 +1038,35 @@ function ToolsDialog({
   onSave: (doc: AgentConfigDocument, message?: string) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <EditorDialog title={`Capabilities — ${agent.name}`} onClose={onClose} wide>
       <ToolsGrid tools={tools} enabled={enabled} loading={loading} onToggle={onToggle} />
       {enabled.has("code_sandbox") && (
-        <div className="mt-4">
-          <CodeManifestSection doc={doc} agent={agent} loading={loading} onSave={onSave} />
+        <div className="mt-4 space-y-3">
+          <label className="flex cursor-pointer items-start justify-between gap-4 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5">
+            <span>
+              <span className="block text-sm font-medium text-[var(--text)]">
+                {t("settings.codeAccess")}
+              </span>
+              <span className="mt-0.5 block text-xs text-[var(--text-muted)]">
+                {t("settings.codeAccessDescription")}
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              aria-label={t("settings.codeAccess")}
+              checked={agent.code.enabled}
+              disabled={loading}
+              onChange={() => void onSave(applyAgentPatch(doc, agent.id, {
+                code: { ...agent.code, enabled: !agent.code.enabled },
+              }))}
+              className="mt-1 h-4 w-4 accent-[var(--accent)]"
+            />
+          </label>
+          {agent.code.enabled && (
+            <CodeManifestSection doc={doc} agent={agent} loading={loading} onSave={onSave} />
+          )}
         </div>
       )}
     </EditorDialog>

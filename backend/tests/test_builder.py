@@ -32,6 +32,50 @@ def _knowledge_registry():
     return registry
 
 
+def _shell_registry():
+    registry = ToolRegistry()
+
+    async def fn(**kwargs):
+        return "ok"
+
+    registry.register(Tool(
+        name="shell",
+        description="run shell commands",
+        parameters={"type": "object", "properties": {}},
+        fn=fn,
+    ))
+    return registry
+
+
+def test_build_context_isolates_code_prompt_by_agent_setting():
+    async def run():
+        doc = AgentConfigDocument(agents=[
+            {"id": "disabled", "name": "Disabled"},
+            {
+                "id": "enabled",
+                "name": "Enabled",
+                "code": {"enabled": True, "manifest": "- repo-a"},
+                "tools": {"include": ["shell"]},
+            },
+        ])
+        registry = _shell_registry()
+
+        disabled, _ = await build_context(
+            ResponsesRequest(model="m", agent_id="disabled", input="hello"),
+            InMemoryStore(), registry=registry, agent_config=doc,
+        )
+        enabled, _ = await build_context(
+            ResponsesRequest(model="m", agent_id="enabled", input="inspect code"),
+            InMemoryStore(), registry=registry, agent_config=doc,
+        )
+
+        assert "/opt/code" not in disabled.system_prompt
+        assert '${AGENT_CODE_PATH:-/opt/code}' in enabled.system_prompt
+        assert "- repo-a" in enabled.system_prompt
+
+    asyncio.run(run())
+
+
 def test_request_ignores_unknown_fields_and_parses_input():
     req = ResponsesRequest(
         model="m", input="hello", enable_agent=True, kb_ids=["k1"]

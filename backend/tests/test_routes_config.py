@@ -358,7 +358,7 @@ def test_config_routes_persist_to_sql_config_store(tmp_path, monkeypatch):
     assert [item.revision for item in revisions] == [1, 2]
 
 
-def test_agent_code_manifest_survives_save_load(tmp_path):
+def test_agent_code_config_survives_save_load(tmp_path):
     from app.agent_config import (
         load_agent_config,
         save_agent_config,
@@ -366,11 +366,15 @@ def test_agent_code_manifest_survives_save_load(tmp_path):
 
     path = str(tmp_path / "config.yaml")
     doc = load_agent_config(path)  # missing file -> default doc
-    doc.agents[0].code_manifest = "- repo-a — the API server"
+    assert doc.agents[0].code.enabled is False
+    assert doc.agents[0].code.manifest == ""
+    doc.agents[0].code.enabled = True
+    doc.agents[0].code.manifest = "- repo-a — the API server"
     save_agent_config(path, doc)
 
     reloaded = load_agent_config(path)
-    assert reloaded.agents[0].code_manifest == "- repo-a — the API server"
+    assert reloaded.agents[0].code.enabled is True
+    assert reloaded.agents[0].code.manifest == "- repo-a — the API server"
 
 
 def test_agent_instructions_survive_save_load(tmp_path):

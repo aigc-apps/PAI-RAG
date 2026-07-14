@@ -47,7 +47,7 @@ const baseDoc: AgentConfigDocument = {
       model: "",
       instructions: "",
       knowledge: { kb_ids: [] },
-      code_manifest: "",
+      code: { enabled: false, manifest: "" },
       tools: { include: ["current_datetime"], exclude: ["code_sandbox"] },
       skills: { enabled: [] },
       settings: {},
@@ -117,7 +117,7 @@ const sandboxCapDoc: AgentConfigDocument = {
 
 // ...and the selected agent has actually activated code browsing (code_sandbox in
 // its own toolbox). Only then does the manifest section belong to the agent.
-const codeBrowsingDoc: AgentConfigDocument = {
+const codeToolsDoc: AgentConfigDocument = {
   ...sandboxCapDoc,
   agents: sandboxCapDoc.agents.map((a) =>
     a.id === "main"
@@ -129,6 +129,13 @@ const codeBrowsingDoc: AgentConfigDocument = {
           },
         }
       : a
+  ),
+};
+
+const codeBrowsingDoc: AgentConfigDocument = {
+  ...codeToolsDoc,
+  agents: codeToolsDoc.agents.map((a) =>
+    a.id === "main" ? { ...a, code: { ...a.code, enabled: true } } : a
   ),
 };
 
@@ -305,11 +312,24 @@ describe("SettingsView", () => {
     expect(screen.queryByText("Enable Skill For Agent")).not.toBeInTheDocument();
   });
 
-  it("hides the code manifest section unless the agent activated code browsing", () => {
-    // Sandbox is enabled globally, but the selected agent has code_sandbox excluded
-    // -> the manifest is not one of its attributes, so the section stays hidden.
-    render(<SettingsView doc={sandboxCapDoc} onBack={vi.fn()} />);
+  it("keeps code access disabled until explicitly enabled for the agent", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={codeToolsDoc} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "编辑能力" }));
+
     expect(screen.queryByText("代码库配置单")).not.toBeInTheDocument();
+    const toggle = screen.getByRole("checkbox", { name: "代码仓库访问" });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].code.enabled).toBe(true);
+    expect(saved.agents[0].tools).toEqual(codeToolsDoc.agents[0].tools);
   });
 
   it("enables the complete knowledge tool bundle while preserving unrelated tools", async () => {
@@ -427,6 +447,8 @@ describe("SettingsView", () => {
     await user.click(screen.getByRole("button", { name: "编辑能力" }));
     // Section is visible once this agent has activated code browsing.
     expect(screen.getByText("代码库配置单")).toBeInTheDocument();
+    expect(screen.getByText("/opt/code")).toBeInTheDocument();
+    expect(screen.queryByText("/mnt/code")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /AI 生成/ }));
 
@@ -436,7 +458,7 @@ describe("SettingsView", () => {
     // ...and is committed via the whole-doc save.
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
-    expect(saved.agents[0].code_manifest).toBe("- repo-a — the API server");
+    expect(saved.agents[0].code.manifest).toBe("- repo-a — the API server");
   });
 
   it("edits the agent Persona in a dialog and commits on 保存", async () => {
@@ -493,6 +515,7 @@ describe("SettingsView", () => {
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     expect(saved.agents).toHaveLength(2);
     expect(saved.agents[1].instructions).toBe("House voice.");
+    expect(saved.agents[1].code).toEqual({ enabled: false, manifest: "" });
   });
 
   it("deletes an agent (two-step confirm) and reassigns the default", async () => {

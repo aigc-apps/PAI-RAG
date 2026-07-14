@@ -162,22 +162,16 @@ async def build_context(
 
     tool_names = [t.name for t in toolbox.tools]
 
-    # The code layer is baked into the sandbox image; the operator flips
-    # code_layer_enabled on the sandbox provider when the template ships it
-    # (provider is None when sandbox is disabled -> flag stays False).
-    code_layer_enabled = bool(
-        getattr(getattr(registry, "sandbox_provider", None), "code_layer_enabled", False)
-    )
-    # Per-agent, admin-curated description of the /opt/code repos (empty => the
-    # block falls back to discover-by-`ls`). Only meaningful when the layer is on.
-    code_manifest = getattr(agent_profile, "code_manifest", "") or ""
+    code_config = getattr(agent_profile, "code", None)
+    code_enabled = bool(getattr(code_config, "enabled", False))
+    code_manifest = getattr(code_config, "manifest", "") or ""
     # The agent's ``instructions`` markdown IS the persona (base system prompt);
     # blank falls back to the built-in DEFAULT_INSTRUCTIONS.
     instructions_md = (getattr(agent_profile, "instructions", "") or "").strip() or DEFAULT_INSTRUCTIONS
     system_prompt = render_stable_system_prompt(
         instructions_md, tool_names=tool_names, project_context=project_context,
         aliyun_pai_enabled=_aliyun_pai_enabled(),
-        code_layer_enabled=code_layer_enabled, code_manifest=code_manifest,
+        code_enabled=code_enabled, code_manifest=code_manifest,
     )
 
     uid = authenticated_user_id or request.resolved_user_id
@@ -312,15 +306,13 @@ def build_subagent_context(
     toolbox = registry.build_toolbox(tool_names)
     effective_names = [t.name for t in toolbox.tools]
 
-    code_layer_enabled = bool(
-        getattr(getattr(registry, "sandbox_provider", None), "code_layer_enabled", False)
-    )
+    code_config = getattr(profile, "code", None)
     instructions_md = (getattr(profile, "instructions", "") or "").strip() or DEFAULT_INSTRUCTIONS
     system_prompt = render_subagent_system_prompt(
         instructions_md, tool_names=effective_names, project_context=project_context,
         aliyun_pai_enabled=_aliyun_pai_enabled(),
-        code_layer_enabled=code_layer_enabled,
-        code_manifest=getattr(profile, "code_manifest", "") or "",
+        code_enabled=bool(getattr(code_config, "enabled", False)),
+        code_manifest=getattr(code_config, "manifest", "") or "",
     )
 
     task_turn = Message(role="user", content=task)

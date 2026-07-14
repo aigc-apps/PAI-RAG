@@ -1,8 +1,14 @@
-import sys, os, asyncio, types
+# ruff: noqa: E402
+
+import asyncio
+import os
+import sys
+import types
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.builder import _resolve_aliyun_sandbox_env
+from app.agent_config import DEFAULT_DOCUMENT
 from app.store.memory import InMemoryStore
 from agent.integrations import aliyun_sts
 from agent.tools.scope import ToolScope
@@ -136,13 +142,12 @@ def test_resolver_skips_without_base_creds(monkeypatch):
 # --------------------------------------------------------------------------- #
 # _build_env_contract merge
 # --------------------------------------------------------------------------- #
-def _fake_provider(code_layer_enabled=False):
+def _fake_provider():
     return types.SimpleNamespace(
         inject_env_contract=True, extra_envs={},
         nas_user_id=1000, nas_group_id=1000,
         nas_user_server_addr="", nas_user_remote_path_template="/users/{user_id}",
         nas_user_read_only=False,
-        code_layer_enabled=code_layer_enabled,
     )
 
 
@@ -162,21 +167,24 @@ def test_env_contract_unchanged_without_aliyun_env():
 
 
 # --------------------------------------------------------------------------- #
-# code layer: baked into the image, so it adds AGENT_CODE_PATH (gated on the
-# code_layer_enabled flag) but NEVER a NAS mountPoint.
+# Code repository location is Agent prompt configuration. The provider neither
+# injects AGENT_CODE_PATH nor adds a NAS mount point for it.
 # --------------------------------------------------------------------------- #
-def test_env_contract_advertises_code_path_only_when_enabled():
+def test_env_contract_does_not_inject_code_path():
     scope = ToolScope(user_id="u1", metadata={})
-    assert "AGENT_CODE_PATH" not in _build_env_contract(_fake_provider(), scope, "s:u1")
-    envs = _build_env_contract(_fake_provider(code_layer_enabled=True), scope, "s:u1")
-    assert envs["AGENT_CODE_PATH"] == "/opt/code"
+    envs = _build_env_contract(_fake_provider(), scope, "s:u1")
+    assert "AGENT_CODE_PATH" not in envs
+
+
+def test_default_sandbox_provider_has_no_code_setting():
+    provider = next(p for p in DEFAULT_DOCUMENT.providers if p.id == "sandbox.default")
+    assert "code_layer_enabled" not in provider.settings
 
 
 def test_nas_config_never_mounts_code_layer():
     scope = ToolScope(user_id="u1", skill_mounts=[])
-    # Baked code layer contributes no mountPoint even when enabled; with no
-    # user/skill mounts either, there is no nasConfig at all.
-    assert _build_nas_config(_fake_provider(code_layer_enabled=True), scope, "s:u1") is None
+    # Code access contributes no mountPoint; with no user/skill mounts either,
+    # there is no nasConfig at all.
     assert _build_nas_config(_fake_provider(), scope, "s:u1") is None
 
 

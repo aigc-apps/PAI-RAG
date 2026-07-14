@@ -77,11 +77,14 @@ def _state(*, registry, agent_config, llm):
 # ---- build_subagent_context ---------------------------------------------------
 
 def test_child_context_is_clean_and_scoped():
-    reg = _registry("knowledge_search", "knowledge_find", "spawn_subagent")
+    reg = _registry("knowledge_search", "knowledge_find", "shell", "spawn_subagent")
     profile = AgentProfile(
         id="researcher", name="R", instructions="be sharp",
         knowledge=AgentKnowledgeConfig(kb_ids=["kb1"]),
-        tools=AgentToolsConfig(include=["knowledge_search", "knowledge_find", "spawn_subagent"]),
+        code={"enabled": True, "manifest": "- repo-a"},
+        tools=AgentToolsConfig(include=[
+            "knowledge_search", "knowledge_find", "shell", "spawn_subagent",
+        ]),
     )
     scope = ToolScope(user_id="u1", conversation_id="c1", metadata={"aliyun_sandbox_env": {"X": "1"}})
     ctx = build_subagent_context(profile=profile, task="find X", parent_scope=scope,
@@ -104,12 +107,16 @@ def test_child_context_is_clean_and_scoped():
     assert all(n not in names for n in SPAWN_TOOL_NAMES)
     # The subagent protocol is in the system prompt.
     assert "Subagent protocol" in ctx.system_prompt
+    assert '${AGENT_CODE_PATH:-/opt/code}' in ctx.system_prompt
+    assert "- repo-a" in ctx.system_prompt
 
 
 # ---- SubagentRunner -----------------------------------------------------------
 
 def test_explore_worker_uses_canonical_knowledge_bundle():
     profile = _explore_profile()
+    assert profile.code.enabled is False
+    assert "/opt/code" not in profile.instructions
     assert all(name in profile.tools.include for name in KNOWLEDGE_TOOL_NAMES)
     assert all(
         legacy not in profile.tools.include and legacy not in profile.instructions

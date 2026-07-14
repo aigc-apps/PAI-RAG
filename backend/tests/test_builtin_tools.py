@@ -125,6 +125,14 @@ def test_shell_tool_formats_provider_result():
     assert '"cwd": "/home/user"' in out
 
 
+def test_shell_tool_description_is_agent_neutral():
+    provider = _FakeSandboxProvider()
+
+    tool = make_shell_tool(provider, default_timeout=12)
+
+    assert "/opt/code" not in tool.description
+
+
 def test_shell_redirects_a_tool_name_typed_as_a_command():
     # Regression: with the sandbox shell available, the model sometimes types a tool
     # name as a command (e.g. `load_skill skill.foo`). The shell must intercept it —

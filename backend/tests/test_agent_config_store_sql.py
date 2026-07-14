@@ -61,6 +61,31 @@ def test_sql_agent_config_store_imports_seed_once():
     asyncio.run(run())
 
 
+def test_sql_agent_code_config_roundtrip():
+    async def run():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        store = SqlAgentConfigStore(engine)
+
+        loaded = await store.load()
+        assert loaded.doc.agents[0].code.enabled is False
+        assert loaded.doc.agents[0].code.manifest == ""
+
+        changed = loaded.doc.model_copy(deep=True)
+        changed.agents[0].code.enabled = True
+        changed.agents[0].code.manifest = "- repo-a"
+        await store.save(changed, updated_by="admin")
+
+        reloaded = await store.load()
+        assert reloaded.doc.agents[0].code.model_dump() == {
+            "enabled": True,
+            "manifest": "- repo-a",
+        }
+        await engine.dispose()
+
+    asyncio.run(run())
+
+
 def test_refresh_config_if_changed_rebuilds_runtime_from_new_revision(monkeypatch):
     async def run():
         monkeypatch.setenv("CONFIG_RELOAD_INTERVAL_SECONDS", "0")

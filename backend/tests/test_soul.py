@@ -137,32 +137,33 @@ def test_sandbox_guidance_when_code_interpreter_or_shell_present():
         assert "runs real code" in out and "/mnt/user" in out
 
 
-def test_code_layer_guidance_gated_on_flag_and_sandbox_tool():
+def test_code_guidance_gated_on_agent_setting_and_sandbox_tool():
     # Off by default even with a sandbox tool present.
     assert "/opt/code" not in render_stable_system_prompt(
         PERSONA, tool_names=["shell"])
     # Enabled flag but no sandbox tool to explore with -> still off.
     assert "/opt/code" not in render_stable_system_prompt(
-        PERSONA, tool_names=["web_fetch"], code_layer_enabled=True)
+        PERSONA, tool_names=["web_fetch"], code_enabled=True)
     # Flag + sandbox tool -> the fallback-to-code guidance appears.
     for tools in (["shell"], ["code_interpreter"]):
         out = render_stable_system_prompt(
-            PERSONA, tool_names=tools, code_layer_enabled=True)
-        assert "/opt/code" in out and "ls /opt/code" in out
+            PERSONA, tool_names=tools, code_enabled=True)
+        assert '${AGENT_CODE_PATH:-/opt/code}' in out
+        assert '"$CODE_PATH"' in out
 
 
 def test_code_manifest_injected_when_present_and_layer_enabled():
     manifest = "- repo-a — the API server\n- repo-b — the ingest worker"
     # Manifest verbatim in the prompt, and still points at ls for the uncovered case.
     out = render_stable_system_prompt(
-        PERSONA, tool_names=["shell"], code_layer_enabled=True,
+        PERSONA, tool_names=["shell"], code_enabled=True,
         code_manifest=manifest)
     assert manifest in out
-    assert "ls /opt/code" in out
+    assert '"$CODE_PATH"' in out
     # Empty manifest -> falls back to the pure discover-by-ls guidance (no leftover
     # "available repositories" header, but /opt/code still mentioned).
     empty = render_stable_system_prompt(
-        PERSONA, tool_names=["shell"], code_layer_enabled=True,
+        PERSONA, tool_names=["shell"], code_enabled=True,
         code_manifest="")
     assert "repo-a" not in empty and "/opt/code" in empty
     # Layer off -> a manifest is never advertised.

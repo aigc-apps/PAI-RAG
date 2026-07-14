@@ -122,6 +122,11 @@ export interface AgentKnowledgeRerankConfig {
   candidate_pool_size: number;
 }
 
+export interface AgentCodeConfig {
+  enabled: boolean;
+  manifest: string;
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -132,9 +137,8 @@ export interface AgentProfile {
   instructions: string;
   // Per-agent knowledge scoping (soft default; still permission-checked per KB).
   knowledge: AgentKnowledgeConfig;
-  // Markdown describing the repos under the read-only /mnt/code layer; injected
-  // into the system prompt when that layer is mounted. Can be AI-generated.
-  code_manifest: string;
+  // Explicit per-agent code repository access and optional prompt manifest.
+  code: AgentCodeConfig;
   tools: AgentToolsConfig;
   skills: AgentSkillsConfig;
   settings: Record<string, unknown>;
@@ -174,7 +178,7 @@ export function newAgentProfile(
       kb_ids: [],
       rerank: { enabled: false, model: "", candidate_pool_size: 50 },
     },
-    code_manifest: "",
+    code: { enabled: false, manifest: "" },
     tools: { include: [], exclude: [] },
     skills: { enabled: [] },
     settings: {},
@@ -265,7 +269,7 @@ export async function saveAgentConfig(
   );
 }
 
-/** Ask the backend to explore the sandbox /mnt/code layer with the LLM and
+/** Ask the backend to explore the sandbox /opt/code layer with the LLM and
  * return a generated Markdown manifest. Not persisted — the caller reviews it
  * and saves it onto the agent profile via saveAgentConfig. */
 export async function generateCodeManifest(

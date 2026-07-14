@@ -249,12 +249,6 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             nas_user_cfg.get("user_remote_path_template") or "/users/{user_id}"
         )
         self.nas_user_read_only = bool(nas_user_cfg.get("user_read_only", False))
-        # Read-only code layer at /opt/code: a release-pinned source snapshot baked
-        # into the sandbox image (one repo per subdirectory), which the agent greps
-        # and reads when the knowledge base can't answer. Baked, not NAS-mounted, so
-        # the service can't sniff it — the operator flips `code_layer_enabled` on a
-        # sandbox template that ships the layer. Off => no AGENT_CODE_PATH, no prompt.
-        self.code_layer_enabled = bool(settings.get("code_layer_enabled"))
         # Runtime env-var contract injected via the platform `envs` field. Only
         # the AGENT_* marker vars + session/user ids are injected here; PATH and
         # PYTHONPATH stay image-side (flat `envs` map cannot interpolate).
@@ -1002,11 +996,6 @@ def _build_env_contract(provider: "AgentRunRestSandboxProvider", scope, scope_ke
         "AGENT_USER_ID": str(scope.user_id or ""),
         "AGENT_SESSION_ID": scope_key,
     }
-    # The code layer is baked into the image (which also sets AGENT_CODE_PATH);
-    # mirror it into the injected contract only when enabled, so the agent never
-    # sees AGENT_CODE_PATH for an image that doesn't ship the layer.
-    if provider.code_layer_enabled:
-        envs["AGENT_CODE_PATH"] = "/opt/code"
     envs.update(provider.extra_envs)
     # Per-user Aliyun session credentials carried on the scope. The secret + token
     # keys are redacted in create-payload logs by _mask_body / _is_secret_key.
@@ -1027,7 +1016,7 @@ _ENV_REFRESH_MARGIN_SECONDS = 300
 
 def _parse_iso_expiry(value: Any) -> Optional[float]:
     """Parse an ISO8601 timestamp (e.g. AssumeRole's '2026-07-08T09:20:00Z')
-    into epoch seconds. Returns None on anything unparseable."""
+    into epoch seconds. Returns None on anything unparsable."""
     if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()

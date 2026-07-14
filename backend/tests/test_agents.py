@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 """Agent profiles drive the run: per-agent tool filtering, instructions (the
 agent's base system prompt), and pinned model — plus the user-facing GET
 /v1/agents roster."""
@@ -176,16 +177,38 @@ def _manifest_client(state, *, role="admin"):
     return TestClient(app)
 
 
-def test_code_manifest_generate_409_when_layer_unconfigured():
-    # registry defaults to a bare ToolRegistry with no sandbox_provider -> 409.
+def test_code_manifest_generate_409_when_agent_code_disabled():
     state = AppState(
         store=InMemoryStore(), llm=None, default_model="test/echo",
         agent_config=_cfg([AgentProfile(id="main", name="Main")]),
+        registry=types.SimpleNamespace(sandbox_provider=object()),
     )
     c = _manifest_client(state)
     r = c.post("/v1/agents/main/code-manifest/generate")
     assert r.status_code == 409, r.text
-    assert "code layer" in r.json()["error"]["message"]
+    assert "not enabled" in r.json()["error"]["message"]
+
+
+def test_code_manifest_generate_404_for_unknown_agent():
+    state = AppState(
+        store=InMemoryStore(), llm=None, default_model="test/echo",
+        agent_config=_cfg([AgentProfile(id="main", name="Main")]),
+        registry=types.SimpleNamespace(sandbox_provider=object()),
+    )
+    r = _manifest_client(state).post("/v1/agents/missing/code-manifest/generate")
+    assert r.status_code == 404, r.text
+
+
+def test_code_manifest_generate_503_without_sandbox_provider():
+    state = AppState(
+        store=InMemoryStore(), llm=None, default_model="test/echo",
+        agent_config=_cfg([
+            AgentProfile(id="main", name="Main", code={"enabled": True}),
+        ]),
+    )
+    r = _manifest_client(state).post("/v1/agents/main/code-manifest/generate")
+    assert r.status_code == 503, r.text
+    assert "sandbox" in r.json()["error"]["message"]
 
 
 def test_code_manifest_generate_requires_admin():
@@ -202,10 +225,7 @@ def test_code_manifest_generate_happy_path(monkeypatch):
     from agent.core.events import TextDelta
     import app.routes.agents as agents_mod
 
-    # Fake registry whose sandbox_provider has the baked code layer enabled.
-    registry = types.SimpleNamespace(
-        sandbox_provider=types.SimpleNamespace(code_layer_enabled=True)
-    )
+    registry = types.SimpleNamespace(sandbox_provider=object())
     # Fake model router: one model, trivial config + llm.
     model_cfg = types.SimpleNamespace(context_window=1000, max_output_tokens=100)
     router = types.SimpleNamespace(
@@ -215,11 +235,16 @@ def test_code_manifest_generate_happy_path(monkeypatch):
     )
     state = AppState(
         store=InMemoryStore(), llm=None, default_model="prov/m",
-        agent_config=_cfg([AgentProfile(id="main", name="Main")]),
+        agent_config=_cfg([
+            AgentProfile(id="main", name="Main", code={"enabled": True}),
+        ]),
         registry=registry, router=router,
     )
 
+    captured = {}
+
     async def fake_build_context(request, store, **kwargs):
+        captured["instruction"] = request.input
         return object(), None
 
     monkeypatch.setattr(agents_mod, "build_context", fake_build_context)
@@ -239,5 +264,6 @@ def test_code_manifest_generate_happy_path(monkeypatch):
     r = c.post("/v1/agents/main/code-manifest/generate")
     assert r.status_code == 200, r.text
     assert r.json() == {"manifest": "- repo-a — the API server"}
+    assert '${AGENT_CODE_PATH:-/opt/code}' in captured["instruction"]
     # Exploration loop was capped, and nothing was persisted (InMemoryStore untouched).
     assert fake_agent.max_steps == agents_mod._MANIFEST_MAX_STEPS

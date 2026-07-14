@@ -167,16 +167,19 @@ _SANDBOX_GUIDANCE = (
 )
 
 
-# Added when a read-only code layer is baked in at /opt/code (gated on both the
-# layer being configured and a sandbox tool being present to explore it). The
+# Added when an Agent explicitly enables code access and has a sandbox tool that
+# can explore it. The repository root defaults to /opt/code but the sandbox image
+# may override it with AGENT_CODE_PATH. The
 # knowledge base is the primary ground truth; the code is the fallback when it
 # comes up empty on questions about the system's own implementation.
 _CODE_LAYER_GUIDANCE = (
-    "A read-only code layer is available at /opt/code ($AGENT_CODE_PATH), holding "
+    "A read-only code layer holds "
     "the source repositories behind this system, one per subdirectory. When "
+    "using it, resolve the root with `CODE_PATH=\"${AGENT_CODE_PATH:-/opt/code}\"` "
+    "and quote `\"$CODE_PATH\"` in shell commands. When "
     "knowledge_search / the knowledge base does not answer a question that is "
     "really about how this system's code behaves, fall back to the code: run "
-    "`ls /opt/code` to see which repositories are available, then explore the "
+    "`ls \"$CODE_PATH\"` to see which repositories are available, then explore the "
     "relevant one with shell / code_interpreter (ripgrep or grep to find "
     "symbols, cat to read files). It is read-only reference material — do not "
     "try to modify it — and it is a fallback for source-level questions, not a "
@@ -193,21 +196,22 @@ _CAPABILITY_PROMPTS: tuple[CapabilityPrompt, ...] = (
 
 
 def _code_layer_block(code_manifest: str) -> str:
-    """The /opt/code guidance. With a manifest (the per-agent, admin-curated
+    """Code repository guidance. With a manifest (the per-agent, admin-curated
     list of what each repo is), lead with it so the model knows the repos up
     front; without one, fall back to discover-by-`ls`."""
     manifest = (code_manifest or "").strip()
     if not manifest:
         return _CODE_LAYER_GUIDANCE
     return (
-        "A read-only code layer is available at /opt/code ($AGENT_CODE_PATH), "
-        "holding the source repositories behind this system, one per "
-        "subdirectory. The available repositories:\n\n" + manifest + "\n\n"
+        "A read-only code layer holds the source repositories behind this "
+        "system, one per subdirectory. Resolve its root with "
+        "`CODE_PATH=\"${AGENT_CODE_PATH:-/opt/code}\"` and quote `\"$CODE_PATH\"` "
+        "in shell commands. The available repositories:\n\n" + manifest + "\n\n"
         "When knowledge_search / the knowledge base does not answer a question "
         "that is really about how this system's code behaves, fall back to the "
-        "code: open the relevant repository under /opt/code and explore it with "
+        "code: open the relevant repository under `\"$CODE_PATH\"` and explore it with "
         "shell / code_interpreter (ripgrep or grep to find symbols, cat to read "
-        "files); run `ls /opt/code` for anything the list above does not cover. "
+        "files); run `ls \"$CODE_PATH\"` for anything the list above does not cover. "
         "It is read-only reference material — do not try to modify it — and it "
         "is a fallback for source-level questions, not a replacement for "
         "knowledge_search on document questions."
@@ -218,7 +222,7 @@ def _render_capability_guidance(
     *,
     tool_names: List[str],
     aliyun_pai_enabled: bool,
-    code_layer_enabled: bool,
+    code_enabled: bool,
     code_manifest: str,
 ) -> List[str]:
     tool_set = set(tool_names)
@@ -231,7 +235,7 @@ def _render_capability_guidance(
             name in tool_set for name in KNOWLEDGE_TOOL_NAMES[1:]
         ):
             blocks.append(_KNOWLEDGE_AUX_GUIDANCE)
-        if capability.id == "sandbox" and code_layer_enabled:
+        if capability.id == "sandbox" and code_enabled:
             blocks.append(_code_layer_block(code_manifest))
     if aliyun_pai_enabled and "shell" in tool_set:
         blocks.append(_ALIYUN_CLI_GUIDANCE)
@@ -240,7 +244,7 @@ def _render_capability_guidance(
 
 def render_stable_system_prompt(
     instructions: str, *, tool_names: List[str], project_context: str = "",
-    aliyun_pai_enabled: bool = False, code_layer_enabled: bool = False,
+    aliyun_pai_enabled: bool = False, code_enabled: bool = False,
     code_manifest: str = "",
 ) -> str:
     """Stable, cacheable layer: the agent's persona (a single freeform Markdown
@@ -255,7 +259,7 @@ def render_stable_system_prompt(
         for block in _render_capability_guidance(
             tool_names=tool_names,
             aliyun_pai_enabled=aliyun_pai_enabled,
-            code_layer_enabled=code_layer_enabled,
+            code_enabled=code_enabled,
             code_manifest=code_manifest,
         ):
             tools_section += "\n\n" + block
@@ -285,7 +289,7 @@ _SUBAGENT_PROTOCOL = (
 
 def render_subagent_system_prompt(
     instructions: str, *, tool_names: List[str], project_context: str = "",
-    aliyun_pai_enabled: bool = False, code_layer_enabled: bool = False,
+    aliyun_pai_enabled: bool = False, code_enabled: bool = False,
     code_manifest: str = "",
 ) -> str:
     """A subagent's system prompt: the same stable persona + tool guidance as a
@@ -295,7 +299,7 @@ def render_subagent_system_prompt(
     base = render_stable_system_prompt(
         instructions, tool_names=tool_names, project_context=project_context,
         aliyun_pai_enabled=aliyun_pai_enabled,
-        code_layer_enabled=code_layer_enabled, code_manifest=code_manifest,
+        code_enabled=code_enabled, code_manifest=code_manifest,
     )
     return base + "\n\n# Subagent protocol\n" + _SUBAGENT_PROTOCOL
 
