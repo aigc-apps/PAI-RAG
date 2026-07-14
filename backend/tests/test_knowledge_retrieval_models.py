@@ -11,6 +11,7 @@ All offline — fake embedder/reranker injected via the router's client map."""
 import asyncio
 import os
 import sys
+from contextlib import contextmanager
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -18,6 +19,7 @@ import pytest
 from loguru import logger
 
 import app.knowledge as knowledge_module
+import app.knowledge_tracing as knowledge_tracing
 from app.db import create_all, make_engine
 from app.knowledge import KnowledgeService
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
@@ -238,6 +240,35 @@ class RecordingSearchEngine:
         return hits[: kwargs["limit"]], len(hits)
 
 
+class RecordingSpan:
+    def __init__(self, name, attributes=None):
+        self.name = name
+        self.attributes = dict(attributes or {})
+        self.events = []
+
+    def set_attribute(self, key, value):
+        self.attributes[key] = value
+
+    def add_event(self, name, attributes=None):
+        self.events.append((name, dict(attributes or {})))
+
+    def set_status(self, _status):
+        return None
+
+
+def _record_spans(monkeypatch):
+    spans = []
+
+    @contextmanager
+    def record(name, attributes=None):
+        span = RecordingSpan(name, attributes)
+        spans.append(span)
+        yield span
+
+    monkeypatch.setattr(knowledge_module, "knowledge_span", record, raising=False)
+    return spans
+
+
 def _hit(*, kb_id, document_id, chunk_id, title, text, score, heading=""):
     return SearchHit(
         kb_id=kb_id,
@@ -445,6 +476,203 @@ def test_rerank_disabled_does_not_apply_candidate_pool_or_document_cap():
 
     hits, _total = asyncio.run(scenario())
     assert [hit.chunk_id for hit in hits] == [f"chunk-{index}" for index in range(5)]
+
+
+def test_hybrid_search_traces_each_pipeline_stage_without_query_content(monkeypatch):
+    sentinel = "SENSITIVE_TRACE_QUERY_93d1"
+    spans = _record_spans(monkeypatch)
+
+    async def scenario():
+        router = _chat_router()
+        router.register_llm("dashscope/rr", FakeReranker())
+        engine = RecordingSearchEngine({})
+        svc = await _svc(router)
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb_a = await svc.create_kb(user=ADMIN, name="A", visibility="public")
+        kb_b = await svc.create_kb(user=ADMIN, name="B", visibility="public")
+        engine.hits_by_kb = {
+            kb_a.id: [
+                _hit(
+                    kb_id=kb_a.id,
+                    document_id=f"a-{index}",
+                    chunk_id=f"a-{index}",
+                    title=f"A {index}",
+                    text=f"alpha {index}",
+                    score=1 - index / 100,
+                )
+                for index in range(4)
+            ],
+            kb_b.id: [
+                _hit(
+                    kb_id=kb_b.id,
+                    document_id=f"b-{index}",
+                    chunk_id=f"b-{index}",
+                    title=f"B {index}",
+                    text=f"beta {index}",
+                    score=0.9 - index / 100,
+                )
+                for index in range(4)
+            ],
+        }
+        await svc.search(
+            user=ADMIN,
+            kb_ids=[kb_a.id, kb_b.id],
+            query=sentinel,
+            top_k=2,
+            rerank_config={
+                "enabled": True,
+                "model": "dashscope/rr",
+                "candidate_pool_size": 5,
+            },
+        )
+
+    asyncio.run(scenario())
+    names = [span.name for span in spans]
+    assert names.count("knowledge.search") == 1
+    assert names.count("knowledge.query_embedding") == 1
+    assert names.count("knowledge.retrieve.hybrid") == 2
+    assert names.count("knowledge.candidate_diversify") == 1
+    assert names.count("knowledge.rerank") == 1
+    retrieval_spans = [
+        span for span in spans if span.name == "knowledge.retrieve.hybrid"
+    ]
+    assert {name for name, _attrs in retrieval_spans[0].events} == {
+        "bm25",
+        "vector_knn",
+    }
+    root = next(span for span in spans if span.name == "knowledge.search")
+    assert root.attributes["knowledge.candidate_pool.configured"] == 5
+    assert root.attributes["knowledge.candidate_pool.effective"] == 5
+    serialized = repr([(span.attributes, span.events) for span in spans])
+    assert sentinel not in serialized
+
+
+def test_keyword_search_uses_bm25_span_without_hybrid_events(monkeypatch):
+    spans = _record_spans(monkeypatch)
+
+    async def scenario():
+        engine = RecordingSearchEngine({})
+        svc = await _svc()
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        engine.hits_by_kb[kb.id] = [
+            _hit(
+                kb_id=kb.id,
+                document_id="doc",
+                chunk_id="chunk",
+                title="Doc",
+                text="body",
+                score=1.0,
+            )
+        ]
+        return await svc.search(
+            user=ADMIN, kb_ids=[kb.id], query="body", mode="keyword"
+        )
+
+    hits, _total = asyncio.run(scenario())
+    retrieval_span = next(
+        span for span in spans if span.name == "knowledge.retrieve.bm25"
+    )
+    assert hits
+    assert retrieval_span.events == []
+    assert not any(span.name == "knowledge.query_embedding" for span in spans)
+
+
+def test_primary_fallback_updates_retrieval_span_without_exception_message(monkeypatch):
+    sentinel = "SENSITIVE_PRIMARY_TRACE_821f"
+    spans = _record_spans(monkeypatch)
+
+    class FailingPrimarySearch:
+        name = "test-primary"
+
+        async def ensure_index(self, kb):
+            return None
+
+        async def index_chunks(self, kb, doc, chunks):
+            return None
+
+        async def search(self, **kwargs):
+            raise RuntimeError(f"primary payload={kwargs['query']}")
+
+    async def scenario():
+        engine = make_engine("sqlite+aiosqlite:///:memory:")
+        await create_all(engine)
+        svc = KnowledgeService(
+            engine, search_engine=FailingPrimarySearch(), fallback_to_local=True
+        )
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content=sentinel, uri="d/1"
+        )
+        return await svc.search(
+            user=ADMIN, kb_ids=[kb.id], query=sentinel, mode="keyword"
+        )
+
+    hits, _total = asyncio.run(scenario())
+    retrieval_span = next(
+        span for span in spans if span.name == "knowledge.retrieve.bm25"
+    )
+    assert hits
+    assert retrieval_span.attributes["knowledge.fallback"] is True
+    assert retrieval_span.attributes["knowledge.engine"] == "local"
+    assert retrieval_span.attributes["error.type"] == "RuntimeError"
+    assert sentinel not in repr(retrieval_span.attributes)
+
+
+def test_rerank_trace_redacts_query_document_and_exception_message(monkeypatch):
+    sentinel = "SENSITIVE_RERANK_TRACE_9c12"
+    spans = _record_spans(monkeypatch)
+
+    class FailingReranker:
+        async def rerank(self, query, documents, *, top_n=None):
+            raise RuntimeError(f"rerank query={query} document={documents[0]}")
+
+    async def scenario():
+        router = _chat_router()
+        router.register_llm("dashscope/rr", FailingReranker())
+        svc = await _svc(router)
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content=sentinel, uri="d/1"
+        )
+        return await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query=sentinel,
+            mode="keyword",
+            rerank_config={"enabled": True, "model": "dashscope/rr"},
+        )
+
+    hits, _total = asyncio.run(scenario())
+    rerank_span = next(span for span in spans if span.name == "knowledge.rerank")
+    assert hits
+    assert rerank_span.attributes["knowledge.status"] == "fallback"
+    assert rerank_span.attributes["error.type"] == "RuntimeError"
+    assert sentinel not in repr(rerank_span.attributes)
+
+
+def test_missing_trace_extension_does_not_change_search_results(monkeypatch):
+    monkeypatch.setattr(
+        knowledge_tracing,
+        "_get_tracer",
+        lambda: (_ for _ in ()).throw(ImportError("not installed")),
+    )
+
+    async def scenario():
+        svc = await _svc()
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content="searchable body", uri="d/1"
+        )
+        return await svc.search(
+            user=ADMIN, kb_ids=[kb.id], query="searchable", mode="keyword"
+        )
+
+    hits, total = asyncio.run(scenario())
+    assert hits
+    assert total == 1
 
 
 def test_query_embedding_fallback_redacts_exception_message(monkeypatch):

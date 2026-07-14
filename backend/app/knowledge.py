@@ -15,6 +15,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.datasource.registry import get_adapter, supported_source_types
 from app.datasource.schema import SourceDocument
+from app.knowledge_tracing import (
+    add_span_event,
+    knowledge_span,
+    mark_span_error,
+    set_span_attributes,
+)
 from app.retrieval_models import build_embedder
 from app.search_engine import LocalSearchEngine, SearchHit
 from app.sync_pipeline import (
@@ -1008,94 +1014,210 @@ class KnowledgeService:
         rerank_config: Optional[dict] = None,
     ) -> tuple[list[SearchHit], int]:
         """Search permission-filtered KBs and globally rank their candidates."""
-        if not query.strip():
-            return [], 0
-        filters = filters or {}
-        allowed = await self.resolve_search_kbs(user=user, kb_ids=kb_ids)
-        if not allowed:
-            return [], 0
-
-        limit = max(1, min(int(top_k or 10), 50))
-        offset = max(0, int(offset or 0))
-        rerank_cfg = dict(rerank_config or {})
-        rerank_on = bool(rerank_cfg.get("enabled")) and self._router is not None
-        configured_candidate_pool = max(
-            1, min(int(rerank_cfg.get("candidate_pool_size") or 50), 200)
-        )
-        effective_candidate_pool = max(configured_candidate_pool, limit + offset)
-        # Give every knowledge base an equal opportunity to contribute to the
-        # unified ranking. A single cross-index request lets a large KB crowd a
-        # small, more relevant KB out of the candidate window.
-        per_kb_fetch_limit = max(20, limit + offset)
-
-        groups: dict[tuple[str, str, int], list[KnowledgeBaseRow]] = {}
-        for kb in allowed:
-            groups.setdefault(self._embedding_group_key(kb), []).append(kb)
-
-        candidates: list[SearchHit] = []
-        total = 0
-        for (_provider, _model, dimension), group in groups.items():
-            query_vector = None
-            if mode in ("vector", "hybrid"):
-                try:
-                    embedder = build_embedder(group[0].embedding_config, self._router)
-                    vecs = await embedder.embed([query], text_type="query")
-                    query_vector = vecs[0] if vecs else None
-                except Exception as ex:
-                    logger.warning(
-                        "operation=query_embedding error_type={} fallback=search_engine",
-                        type(ex).__name__,
-                    )
-            for kb in group:
-                kwargs = dict(
-                    kb_ids=[kb.id],
-                    query=query,
-                    mode=mode,
-                    offset=0,
-                    limit=per_kb_fetch_limit,
-                    score_threshold=score_threshold,
-                    dimension=dimension,
-                    filters=filters,
-                    query_vector=query_vector,
+        with knowledge_span("knowledge.search", {"knowledge.mode": mode}) as search_span:
+            if not query.strip():
+                set_span_attributes(
+                    search_span,
+                    {"knowledge.results.count": 0, "knowledge.total_hits": 0},
                 )
-                engine = self._search
-                if engine is self._local:
-                    kb_hits, kb_total = await self._local.search(**kwargs)
-                else:
-                    try:
-                        kb_hits, kb_total = await engine.search(**kwargs)
-                    except Exception as ex:
-                        if not self._fallback_to_local:
-                            raise
-                        logger.warning(
-                            "operation=primary_search engine={} error_type={} "
-                            "fallback=local",
-                            getattr(engine, "name", "?"),
-                            type(ex).__name__,
-                        )
-                        kb_hits, kb_total = await self._local.search(**kwargs)
-                candidates.extend(kb_hits)
-                total += kb_total
+                return [], 0
+            filters = filters or {}
+            allowed = await self.resolve_search_kbs(user=user, kb_ids=kb_ids)
+            if not allowed:
+                set_span_attributes(
+                    search_span,
+                    {
+                        "knowledge.kb_count": 0,
+                        "knowledge.results.count": 0,
+                        "knowledge.total_hits": 0,
+                    },
+                )
+                return [], 0
 
-        candidates.sort(key=lambda hit: hit.score, reverse=True)
-        logger.info(
-            f"[search] kb_ids={[kb.id for kb in allowed]} "
-            f"candidates={len(candidates)} rerank="
-            f"{rerank_cfg.get('model') if rerank_on else None}"
-        )
-        if rerank_on and candidates:
-            candidates = self._cap_chunks_per_document(candidates, max_chunks=3)
-            candidates = candidates[:effective_candidate_pool]
-            candidates = await self._rerank_hits(
-                query,
-                candidates,
-                limit + offset,
-                rerank_cfg,
-                kb_names={kb.id: kb.name for kb in allowed},
+            limit = max(1, min(int(top_k or 10), 50))
+            offset = max(0, int(offset or 0))
+            rerank_cfg = dict(rerank_config or {})
+            rerank_on = bool(rerank_cfg.get("enabled")) and self._router is not None
+            configured_candidate_pool = max(
+                1, min(int(rerank_cfg.get("candidate_pool_size") or 50), 200)
             )
-        result = candidates[offset : offset + limit]
-        logger.info(f"[search] final_results={len(result)} total={total}")
-        return result, total
+            effective_candidate_pool = max(
+                configured_candidate_pool, limit + offset
+            )
+            set_span_attributes(
+                search_span,
+                {
+                    "knowledge.top_k": limit,
+                    "knowledge.offset": offset,
+                    "knowledge.kb_count": len(allowed),
+                    "knowledge.rerank.enabled": rerank_on,
+                    "knowledge.rerank.model": (
+                        rerank_cfg.get("model") if rerank_on else None
+                    ),
+                    "knowledge.candidate_pool.configured": configured_candidate_pool,
+                    "knowledge.candidate_pool.effective": effective_candidate_pool,
+                },
+            )
+            # Give every knowledge base an equal opportunity to contribute to the
+            # unified ranking. A single cross-index request lets a large KB crowd a
+            # small, more relevant KB out of the candidate window.
+            per_kb_fetch_limit = max(20, limit + offset)
+
+            groups: dict[tuple[str, str, int], list[KnowledgeBaseRow]] = {}
+            for kb in allowed:
+                groups.setdefault(self._embedding_group_key(kb), []).append(kb)
+
+            candidates: list[SearchHit] = []
+            total = 0
+            for (provider, model, dimension), group in groups.items():
+                query_vector = None
+                if mode in ("vector", "hybrid"):
+                    with knowledge_span(
+                        "knowledge.query_embedding",
+                        {
+                            "knowledge.embedding.provider": provider,
+                            "knowledge.embedding.model": model,
+                            "knowledge.embedding.dimension": dimension,
+                            "knowledge.kb_count": len(group),
+                        },
+                    ) as embedding_span:
+                        try:
+                            embedder = build_embedder(
+                                group[0].embedding_config, self._router
+                            )
+                            vecs = await embedder.embed([query], text_type="query")
+                            query_vector = vecs[0] if vecs else None
+                            set_span_attributes(
+                                embedding_span, {"knowledge.status": "ok"}
+                            )
+                        except Exception as ex:
+                            mark_span_error(embedding_span, ex)
+                            logger.warning(
+                                "operation=query_embedding error_type={} "
+                                "fallback=search_engine",
+                                type(ex).__name__,
+                            )
+                for kb in group:
+                    kwargs = dict(
+                        kb_ids=[kb.id],
+                        query=query,
+                        mode=mode,
+                        offset=0,
+                        limit=per_kb_fetch_limit,
+                        score_threshold=score_threshold,
+                        dimension=dimension,
+                        filters=filters,
+                        query_vector=query_vector,
+                    )
+                    engine = self._search
+                    retrieval_span_name = {
+                        "keyword": "knowledge.retrieve.bm25",
+                        "vector": "knowledge.retrieve.vector",
+                    }.get(mode, "knowledge.retrieve.hybrid")
+                    with knowledge_span(
+                        retrieval_span_name,
+                        {
+                            "knowledge.kb_id": kb.id,
+                            "knowledge.engine": getattr(engine, "name", "unknown"),
+                            "knowledge.retrieval.limit": per_kb_fetch_limit,
+                            "knowledge.fallback": False,
+                            "knowledge.knn.k": (
+                                per_kb_fetch_limit
+                                if mode in ("vector", "hybrid")
+                                else None
+                            ),
+                            "knowledge.knn.num_candidates": (
+                                max(50, per_kb_fetch_limit * 4)
+                                if mode in ("vector", "hybrid")
+                                else None
+                            ),
+                        },
+                    ) as retrieval_span:
+                        if mode == "hybrid":
+                            add_span_event(retrieval_span, "bm25")
+                            add_span_event(retrieval_span, "vector_knn")
+                        if engine is self._local:
+                            kb_hits, kb_total = await self._local.search(**kwargs)
+                        else:
+                            try:
+                                kb_hits, kb_total = await engine.search(**kwargs)
+                            except Exception as ex:
+                                if not self._fallback_to_local:
+                                    mark_span_error(retrieval_span, ex)
+                                    raise
+                                logger.warning(
+                                    "operation=primary_search engine={} error_type={} "
+                                    "fallback=local",
+                                    getattr(engine, "name", "?"),
+                                    type(ex).__name__,
+                                )
+                                set_span_attributes(
+                                    retrieval_span,
+                                    {
+                                        "error.type": type(ex).__name__,
+                                        "knowledge.engine": self._local.name,
+                                        "knowledge.fallback": True,
+                                        "knowledge.status": "fallback",
+                                    },
+                                )
+                                kb_hits, kb_total = await self._local.search(**kwargs)
+                        set_span_attributes(
+                            retrieval_span,
+                            {
+                                "knowledge.results.count": len(kb_hits),
+                                "knowledge.total_hits": kb_total,
+                            },
+                        )
+                    candidates.extend(kb_hits)
+                    total += kb_total
+
+            candidates.sort(key=lambda hit: hit.score, reverse=True)
+            retrieved_count = len(candidates)
+            logger.info(
+                f"[search] kb_ids={[kb.id for kb in allowed]} "
+                f"candidates={retrieved_count} rerank="
+                f"{rerank_cfg.get('model') if rerank_on else None}"
+            )
+            if rerank_on and candidates:
+                diversify_input = len(candidates)
+                with knowledge_span(
+                    "knowledge.candidate_diversify",
+                    {
+                        "knowledge.candidates.input": diversify_input,
+                        "knowledge.max_chunks_per_document": 3,
+                    },
+                ) as diversify_span:
+                    candidates = self._cap_chunks_per_document(
+                        candidates, max_chunks=3
+                    )
+                    set_span_attributes(
+                        diversify_span,
+                        {
+                            "knowledge.candidates.output": len(candidates),
+                            "knowledge.candidates.dropped": (
+                                diversify_input - len(candidates)
+                            ),
+                        },
+                    )
+                candidates = candidates[:effective_candidate_pool]
+                candidates = await self._rerank_hits(
+                    query,
+                    candidates,
+                    limit + offset,
+                    rerank_cfg,
+                    kb_names={kb.id: kb.name for kb in allowed},
+                )
+            result = candidates[offset : offset + limit]
+            set_span_attributes(
+                search_span,
+                {
+                    "knowledge.candidates.retrieved": retrieved_count,
+                    "knowledge.results.count": len(result),
+                    "knowledge.total_hits": total,
+                },
+            )
+            logger.info(f"[search] final_results={len(result)} total={total}")
+            return result, total
 
     @staticmethod
     def _cap_chunks_per_document(
@@ -1135,29 +1257,54 @@ class KnowledgeService:
         any failure returns the original order (trimmed). Overwrites each hit's
         ``score`` with the reranker's relevance score."""
         model_id = rerank_cfg.get("model") or self._router.default_model_id_of_type("rerank")
-        if not model_id:
-            return hits[:limit]
         top_n = int(rerank_cfg.get("top_n") or limit)
-        try:
-            reranker = self._router.get_reranker(model_id)
-            documents = [self._rerank_document(hit, kb_names) for hit in hits]
-            ranked = await reranker.rerank(query, documents, top_n=top_n)
-        except Exception as ex:
-            logger.warning(
-                "operation=rerank model={} error_type={} fallback=original_order",
-                model_id,
-                type(ex).__name__,
+        with knowledge_span(
+            "knowledge.rerank",
+            {
+                "knowledge.rerank.model": model_id,
+                "knowledge.candidates.input": len(hits),
+                "knowledge.rerank.top_n": top_n,
+            },
+        ) as rerank_span:
+            if not model_id:
+                set_span_attributes(rerank_span, {"knowledge.status": "skipped"})
+                return hits[:limit]
+            try:
+                reranker = self._router.get_reranker(model_id)
+                documents = [self._rerank_document(hit, kb_names) for hit in hits]
+                ranked = await reranker.rerank(query, documents, top_n=top_n)
+            except Exception as ex:
+                mark_span_error(rerank_span, ex)
+                set_span_attributes(rerank_span, {"knowledge.status": "fallback"})
+                logger.warning(
+                    "operation=rerank model={} error_type={} fallback=original_order",
+                    model_id,
+                    type(ex).__name__,
+                )
+                return hits[:limit]
+            if not ranked:
+                set_span_attributes(
+                    rerank_span,
+                    {
+                        "knowledge.status": "fallback",
+                        "knowledge.candidates.output": 0,
+                    },
+                )
+                return hits[:limit]
+            out: list[SearchHit] = []
+            for idx, score in ranked:
+                if 0 <= idx < len(hits):
+                    hit = hits[idx]
+                    hit.score = round(float(score), 6)
+                    out.append(hit)
+            set_span_attributes(
+                rerank_span,
+                {
+                    "knowledge.status": "ok",
+                    "knowledge.candidates.output": len(out[:limit]),
+                },
             )
-            return hits[:limit]
-        if not ranked:
-            return hits[:limit]
-        out: list[SearchHit] = []
-        for idx, score in ranked:
-            if 0 <= idx < len(hits):
-                hit = hits[idx]
-                hit.score = round(float(score), 6)
-                out.append(hit)
-        return out[:limit]
+            return out[:limit]
 
     async def reindex_kb(self, kb_id: str, *, user: User) -> dict:
         """Admin: (re)build the search-engine index for a KB from its current
