@@ -20,7 +20,8 @@ def make_read_skill_resource_tool() -> Tool:
     script, ...) from a skill package on demand. Host-side and path-jailed to the
     skill's own directory, so it works without a sandbox or NAS mount — the local
     skill ``source_path`` is never bind-mounted, so a shell ``cat`` of
-    /mnt/skills/<id> would only work on a NAS deployment; this tool always works."""
+    /mnt/skills/<id> depends on the NAS skill mount being present; this tool always
+    works regardless."""
 
     async def fn(skill_id: str, path: str) -> str:
         scope = get_current_tool_scope()

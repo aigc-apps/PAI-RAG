@@ -489,8 +489,8 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
         skill_mounts=[{
             "id": "skill.writer",
             "nas": {
-                "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/skills/writer@1.0.0",
-                "remotePath": "/skills/writer@1.0.0",
+                "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/skills/writer",
+                "remotePath": "/skills/writer",
                 "mountDir": "/mnt/skills/writer",
                 "readOnly": True,
             },
@@ -521,7 +521,7 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
             "groupId": 1000,
             "mountPoints": [
                 {
-                    "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/skills/writer@1.0.0",
+                    "serverAddr": "nas-cn-hangzhou.aliyuncs.com:/skills/writer",
                     "mountDir": "/mnt/skills/writer",
                     "readOnly": True,
                 },

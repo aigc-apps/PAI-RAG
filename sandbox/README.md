@@ -11,6 +11,25 @@ registered **outside the agent service**. See
 `docs/design/skill_install_mount_dependencies.md` → "Sandbox Image Contract"
 for the full contract.
 
+## Path convention: `/opt/*` vs `/mnt/*`
+
+The two prefixes are **not** interchangeable — each encodes how the files got
+there, so keep new paths on the right side of the line:
+
+- **`/opt/*` = baked into the image (local disk).** Currently just `/opt/code`
+  (the read-only code layer). Baked because local disk beats NFS for the
+  browse/grep workload. Content is fixed at image-build time.
+- **`/mnt/*` = NAS mounts, attached per-sandbox at create time** via
+  `nasConfig`. These are the three contract paths: `/mnt/system`, `/mnt/skills`
+  (read-only), and `/mnt/user` (read-write, per-user). Content is dynamic and
+  lives on the NAS, not in the image; `agent-sandbox-bootstrap` validates all
+  three exist on start (contract v1).
+
+Do **not** move a NAS mount (e.g. skills) under `/opt`, or a baked layer under
+`/mnt` — that mixes backing stores within one prefix and breaks the mount
+contract the bootstrap enforces. Skills stay at `/mnt/skills/<mount_id>`; code
+stays at `/opt/code`.
+
 ## What the image does
 
 - `mkdir /mnt/system /mnt/skills /mnt/user` (empty dirs — content comes from

@@ -244,11 +244,15 @@ def list_skill_files(source_path: str, *, max_files: int = 200) -> List[str]:
     return out
 
 
-def render_skill_detail(package: SkillPackage) -> str:
+def render_skill_detail(package: SkillPackage, mount_path: Optional[str] = None) -> str:
     """The Level-2 payload returned by the ``load_skill`` tool: the skill's full
     instructions plus a manifest of the bundled files the agent can read via
     ``read_skill_resource``. This is loaded on demand — never preloaded into every
-    turn — so context stays lean until a skill is actually needed."""
+    turn — so context stays lean until a skill is actually needed.
+
+    ``mount_path`` is the skill's read-only mount dir inside the sandbox
+    (e.g. ``/mnt/skills/writer``). When known it is stated explicitly so the agent
+    reaches its scripts at the right path instead of guessing one from the id."""
     body = package.instructions.strip() or package.description.strip()
     parts = [
         f"# Skill: {package.name} (`{package.capability_id}`)",
@@ -259,10 +263,19 @@ def render_skill_detail(package: SkillPackage) -> str:
     files = list_skill_files(package.path)
     if files:
         parts.append("")
-        parts.append(
-            "## Bundled files\n"
-            f'Read any of these with `read_skill_resource("{package.capability_id}", "<path>")`:'
-        )
+        if mount_path:
+            parts.append(
+                f"## Bundled files\nThis skill's files are mounted read-only in the "
+                f"sandbox at `{mount_path}` — run its scripts and `ls`/`cat` them there "
+                f"with shell / code_interpreter (use that exact path, not one built "
+                f"from the skill id). To read a single file host-side instead, use "
+                f'`read_skill_resource("{package.capability_id}", "<path>")`:'
+            )
+        else:
+            parts.append(
+                "## Bundled files\n"
+                f'Read any of these with `read_skill_resource("{package.capability_id}", "<path>")`:'
+            )
         parts.extend(f"- {rel}" for rel in files)
     return "\n".join(parts)
 
@@ -407,8 +420,10 @@ def _skill_nas_mount(package: SkillPackage, mount_path: str, nas_cfg: Dict[str, 
     if not server_addr:
         return {}
     prefix = str(nas_cfg.get("remotePathPrefix") or nas_cfg.get("remote_path_prefix") or "skills").strip("/")
-    # Remote path on the NAS filesystem, e.g. "/skills/writer@1.0.0".
-    remote_path = f"/{prefix}/{package.mount_id}@{package.version}".replace("//", "/")
+    # Remote path on the NAS filesystem, e.g. "/skills/writer". Unversioned: it
+    # must match the dir install_skill writes (root/<mount_id>, no @version), so
+    # the sandbox's read-only mount lands on the freshly installed files.
+    remote_path = f"/{prefix}/{package.mount_id}".replace("//", "/")
     # serverAddr is the NAS mount point with the remote path appended, e.g.
     # "xxxx.nas.aliyuncs.com:/skills/writer@1.0.0".
     if server_addr.endswith(":/"):

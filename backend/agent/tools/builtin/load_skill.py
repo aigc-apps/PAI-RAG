@@ -42,7 +42,7 @@ def make_load_skill_tool() -> Tool:
                 f"load_skill failed: skill '{skill_id}' is registered but its package "
                 f"at {source_path!r} could not be loaded."
             )
-        return render_skill_detail(package)
+        return render_skill_detail(package, mount_path=mount.get("mount_path"))
 
     return Tool(
         name="load_skill",

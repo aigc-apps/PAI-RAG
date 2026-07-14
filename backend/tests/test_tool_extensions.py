@@ -97,9 +97,10 @@ def test_resolve_skill_mounts_with_nas_config(tmp_path):
     )
 
     assert mounts[0].to_dict()["mount_path"] == "/mnt/skills/report"
-    assert mounts[0].nas["remotePath"] == "/skills/report@1.2.0"
+    # Unversioned remote path: must match the dir install_skill writes (root/<mount_id>).
+    assert mounts[0].nas["remotePath"] == "/skills/report"
     assert mounts[0].nas["mountDir"] == "/mnt/skills/report"
-    assert mounts[0].nas["serverAddr"] == "nas-cn-hangzhou.aliyuncs.com:/skills/report@1.2.0"
+    assert mounts[0].nas["serverAddr"] == "nas-cn-hangzhou.aliyuncs.com:/skills/report"
     assert mounts[0].nas["readOnly"] is True
     assert skill_mount_fingerprint(mounts) != "none"
 
@@ -269,6 +270,24 @@ def test_render_skill_detail_includes_bundled_file_manifest(tmp_path):
     assert "## Bundled files" in detail
     assert "resources/template.html" in detail
     assert 'read_skill_resource("skill.architecture-diagram"' in detail
+    # Without a mount path, no sandbox path is asserted.
+    assert "/mnt/skills" not in detail
+
+
+def test_render_skill_detail_states_sandbox_mount_path_when_known(tmp_path):
+    skill_dir = tmp_path / "arch"
+    (skill_dir / "resources").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: architecture-diagram\ndescription: Draw diagrams.\n---\n\nStep one.\n",
+        encoding="utf-8",
+    )
+    (skill_dir / "resources" / "template.html").write_text("<html></html>", encoding="utf-8")
+    packages = discover_skill_packages([{"type": "local", "path": str(tmp_path)}])
+    detail = render_skill_detail(packages[0], mount_path="/mnt/skills/architecture-diagram")
+    # The agent is told the exact read-only mount dir so it does not guess a path.
+    assert "/mnt/skills/architecture-diagram" in detail
+    assert "read-only" in detail
+    assert "resources/template.html" in detail
 
 
 def test_find_enabled_skill_mount_matches_with_or_without_prefix():
