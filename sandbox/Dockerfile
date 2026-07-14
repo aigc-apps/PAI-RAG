@@ -51,9 +51,11 @@ RUN mkdir -p /mnt/system /mnt/skills /mnt/user /opt/code /home/user \
 # archive URL changes. Root-owned + world-readable: the runtime user (uid 1000)
 # only ever reads it. Guarded so an empty PAIREC_CODE_ARCHIVE_URL builds an
 # image with an empty /opt/code (the code layer stays off via config).
+# --strip-components=1 drops the archive's single top-level wrapper dir so the
+# repos land directly at /opt/code/<repo> rather than /opt/code/<wrapper>/<repo>.
 RUN if [ -n "${PAIREC_CODE_ARCHIVE_URL}" ]; then \
       curl -fsSL "${PAIREC_CODE_ARCHIVE_URL}" -o /tmp/pairec_code.tar.gz \
-      && tar -xzf /tmp/pairec_code.tar.gz -C /opt/code \
+      && tar -xzf /tmp/pairec_code.tar.gz --strip-components=1 -C /opt/code \
       && rm -f /tmp/pairec_code.tar.gz \
       && chmod -R a+rX /opt/code \
       && echo "baked code layer:" && ls -1 /opt/code ; \

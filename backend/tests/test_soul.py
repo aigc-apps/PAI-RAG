@@ -148,8 +148,7 @@ def test_code_guidance_gated_on_agent_setting_and_sandbox_tool():
     for tools in (["shell"], ["code_interpreter"]):
         out = render_stable_system_prompt(
             PERSONA, tool_names=tools, code_enabled=True)
-        assert '${AGENT_CODE_PATH:-/opt/code}' in out
-        assert '"$CODE_PATH"' in out
+        assert 'ls /opt/code' in out
 
 
 def test_code_manifest_injected_when_present_and_layer_enabled():
@@ -159,7 +158,7 @@ def test_code_manifest_injected_when_present_and_layer_enabled():
         PERSONA, tool_names=["shell"], code_enabled=True,
         code_manifest=manifest)
     assert manifest in out
-    assert '"$CODE_PATH"' in out
+    assert '/opt/code' in out
     # Empty manifest -> falls back to the pure discover-by-ls guidance (no leftover
     # "available repositories" header, but /opt/code still mentioned).
     empty = render_stable_system_prompt(

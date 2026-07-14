@@ -168,18 +168,17 @@ _SANDBOX_GUIDANCE = (
 
 
 # Added when an Agent explicitly enables code access and has a sandbox tool that
-# can explore it. The repository root defaults to /opt/code but the sandbox image
-# may override it with AGENT_CODE_PATH. The
-# knowledge base is the primary ground truth; the code is the fallback when it
-# comes up empty on questions about the system's own implementation.
+# can explore it. The repository root is fixed at /opt/code in the sandbox image
+# (the AGENT_CODE_PATH env var mirrors it for services, but the agent just uses
+# the path directly). The knowledge base is the primary ground truth; the code is
+# the fallback when it comes up empty on questions about the system's own
+# implementation.
 _CODE_LAYER_GUIDANCE = (
-    "A read-only code layer holds "
+    "A read-only code layer at `/opt/code` holds "
     "the source repositories behind this system, one per subdirectory. When "
-    "using it, resolve the root with `CODE_PATH=\"${AGENT_CODE_PATH:-/opt/code}\"` "
-    "and quote `\"$CODE_PATH\"` in shell commands. When "
     "knowledge_search / the knowledge base does not answer a question that is "
     "really about how this system's code behaves, fall back to the code: run "
-    "`ls \"$CODE_PATH\"` to see which repositories are available, then explore the "
+    "`ls /opt/code` to see which repositories are available, then explore the "
     "relevant one with shell / code_interpreter (ripgrep or grep to find "
     "symbols, cat to read files). It is read-only reference material — do not "
     "try to modify it — and it is a fallback for source-level questions, not a "
@@ -203,15 +202,14 @@ def _code_layer_block(code_manifest: str) -> str:
     if not manifest:
         return _CODE_LAYER_GUIDANCE
     return (
-        "A read-only code layer holds the source repositories behind this "
-        "system, one per subdirectory. Resolve its root with "
-        "`CODE_PATH=\"${AGENT_CODE_PATH:-/opt/code}\"` and quote `\"$CODE_PATH\"` "
-        "in shell commands. The available repositories:\n\n" + manifest + "\n\n"
+        "A read-only code layer at `/opt/code` holds the source repositories "
+        "behind this system, one per subdirectory. The available repositories:"
+        "\n\n" + manifest + "\n\n"
         "When knowledge_search / the knowledge base does not answer a question "
         "that is really about how this system's code behaves, fall back to the "
-        "code: open the relevant repository under `\"$CODE_PATH\"` and explore it with "
+        "code: open the relevant repository under `/opt/code` and explore it with "
         "shell / code_interpreter (ripgrep or grep to find symbols, cat to read "
-        "files); run `ls \"$CODE_PATH\"` for anything the list above does not cover. "
+        "files); run `ls /opt/code` for anything the list above does not cover. "
         "It is read-only reference material — do not try to modify it — and it "
         "is a fallback for source-level questions, not a replacement for "
         "knowledge_search on document questions."

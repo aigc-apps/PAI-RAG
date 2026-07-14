@@ -70,7 +70,7 @@ def test_build_context_isolates_code_prompt_by_agent_setting():
         )
 
         assert "/opt/code" not in disabled.system_prompt
-        assert '${AGENT_CODE_PATH:-/opt/code}' in enabled.system_prompt
+        assert '/opt/code' in enabled.system_prompt
         assert "- repo-a" in enabled.system_prompt
 
     asyncio.run(run())

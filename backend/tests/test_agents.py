@@ -264,6 +264,6 @@ def test_code_manifest_generate_happy_path(monkeypatch):
     r = c.post("/v1/agents/main/code-manifest/generate")
     assert r.status_code == 200, r.text
     assert r.json() == {"manifest": "- repo-a — the API server"}
-    assert '${AGENT_CODE_PATH:-/opt/code}' in captured["instruction"]
+    assert 'ls /opt/code' in captured["instruction"]
     # Exploration loop was capped, and nothing was persisted (InMemoryStore untouched).
     assert fake_agent.max_steps == agents_mod._MANIFEST_MAX_STEPS

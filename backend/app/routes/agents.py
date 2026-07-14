@@ -25,15 +25,13 @@ router = APIRouter()
 # sandbox tools itself to inspect the configured code root, then emit only the list.
 _MANIFEST_INSTRUCTION = (
     "You are documenting the source-code repositories mounted read-only at "
-    "the sandbox code root for another AI agent's system prompt. Resolve the "
-    "root first with `CODE_PATH=\"${AGENT_CODE_PATH:-/opt/code}\"`. Explore it "
-    "yourself "
+    "`/opt/code` for another AI agent's system prompt. Explore it yourself "
     "with the shell / code_interpreter tools:\n"
-    "1. Run `ls \"$CODE_PATH\"` — each subdirectory is one repository.\n"
+    "1. Run `ls /opt/code` — each subdirectory is one repository.\n"
     "2. For each repository, read its README and skim its top-level layout "
     "(ls, cat the README and obvious entry files) to learn what it is for.\n\n"
     "Then output ONLY a concise Markdown manifest: one short section or bullet "
-    "per repository, giving its directory name under `\"$CODE_PATH\"` and a 1-2 "
+    "per repository, giving its directory name under `/opt/code` and a 1-2 "
     "sentence description of what it contains and when it would be relevant to "
     "consult. Do NOT include your shell transcript or exploration steps — just "
     "the final manifest. If the code root is empty or unreadable, say so in one line."

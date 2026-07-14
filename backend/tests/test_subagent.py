@@ -107,7 +107,7 @@ def test_child_context_is_clean_and_scoped():
     assert all(n not in names for n in SPAWN_TOOL_NAMES)
     # The subagent protocol is in the system prompt.
     assert "Subagent protocol" in ctx.system_prompt
-    assert '${AGENT_CODE_PATH:-/opt/code}' in ctx.system_prompt
+    assert '/opt/code' in ctx.system_prompt
     assert "- repo-a" in ctx.system_prompt
 
 
