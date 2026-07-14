@@ -19,10 +19,11 @@ def _available_ids(mounts) -> str:
 def make_load_skill_tool() -> Tool:
     """Level-2 progressive disclosure. The agent sees only a one-line summary of
     each skill in the always-present ``# Available Skills`` catalog; when a task
-    needs one, it calls ``load_skill`` to pull the full SKILL.md instructions plus
-    a manifest of the skill's bundled files. The heavy instruction text is loaded
-    on demand instead of injected into every turn, and only skills enabled for the
-    current agent (present on the tool scope) are loadable."""
+    needs one, it calls ``load_skill`` to pull the full SKILL.md instructions and
+    the exact read-only sandbox directory for any bundled files. The heavy
+    instruction text is loaded on demand instead of injected into every turn, and
+    only skills enabled for the current agent (present on the tool scope) are
+    loadable."""
 
     async def fn(skill_id: str) -> str:
         scope = get_current_tool_scope()
@@ -50,7 +51,9 @@ def make_load_skill_tool() -> Tool:
             "Load the full instructions for one of your available skills (see the "
             "# Available Skills catalog). Call this before performing a task that a "
             "skill covers — the catalog only shows a summary; the real step-by-step "
-            "guidance, conventions, and the list of bundled files come from here. "
+            "guidance and conventions come from here. If the skill bundles files, "
+            "the result gives their exact read-only sandbox directory; use shell or "
+            "code_interpreter there to list, read, or run them. "
             "Pass the skill id exactly as shown in the catalog, e.g. "
             "'skill.architecture-diagram'."
         ),

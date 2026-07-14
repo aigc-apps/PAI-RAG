@@ -188,10 +188,10 @@ def render_skill_catalog(
     """Always-injected catalog of the agent's enabled skills (name + description
     + capability id) — Level 1 of Agent Skills progressive disclosure. The agent
     always knows *which* skills it has and when to reach for them; the full
-    instructions (L2) load on demand via the ``load_skill`` tool and bundled files
-    (L3) via ``read_skill_resource``. Nothing here is gated on a lexical query
-    match, so a community SKILL.md-only skill with no trigger keywords is still
-    visible (the old substring-match gate made such skills invisible)."""
+    instructions (L2) load on demand via the ``load_skill`` tool. Bundled files
+    are accessed only inside the sandbox. Nothing here is gated on a lexical
+    query match, so a community SKILL.md-only skill with no trigger keywords is
+    still visible (the old substring-match gate made such skills invisible)."""
     enabled = {_normalize_skill_id(item) for item in enabled_ids}
     selected = sorted(
         (p for p in packages if _normalize_skill_id(p.capability_id) in enabled),
@@ -206,8 +206,8 @@ def render_skill_catalog(
         "tool — a tool/function call, never a shell command — with its id to load the "
         "full step-by-step instructions, then follow them; do not attempt the task "
         "from the summary alone. Skills may bundle extra files (templates, references, "
-        "scripts); `load_skill` lists them and you read them with the "
-        "`read_skill_resource` tool.",
+        "scripts); `load_skill` gives you the exact read-only sandbox directory. Use "
+        "shell or code_interpreter there to discover, read, or run those files.",
         "",
     ]
     for package in selected:
@@ -216,43 +216,8 @@ def render_skill_catalog(
     return "\n".join(lines)
 
 
-# Files that are the manifest/instructions themselves — not user-facing bundled
-# resources — so they are hidden from the read_skill_resource file listing.
-_SKILL_META_FILES = {"skill.yaml", "skill.yml", "SKILL.md", "SKILL.MD"}
-_SKILL_SKIP_DIRS = {".git", "__pycache__", ".DS_Store", "node_modules", ".venv"}
-
-
-def list_skill_files(source_path: str, *, max_files: int = 200) -> List[str]:
-    """Relative POSIX paths of the bundled files inside a skill package
-    (templates, references, scripts) — everything except the manifest/instruction
-    files. Used to advertise Level-3 resources the agent can read on demand."""
-    root = Path(source_path)
-    if not root.is_dir():
-        return []
-    out: List[str] = []
-    for path in sorted(root.rglob("*")):
-        if len(out) >= max_files:
-            break
-        if not path.is_file():
-            continue
-        rel = path.relative_to(root)
-        if any(part in _SKILL_SKIP_DIRS for part in rel.parts):
-            continue
-        if rel.name in _SKILL_META_FILES and len(rel.parts) == 1:
-            continue
-        out.append(rel.as_posix())
-    return out
-
-
 def render_skill_detail(package: SkillPackage, mount_path: Optional[str] = None) -> str:
-    """The Level-2 payload returned by the ``load_skill`` tool: the skill's full
-    instructions plus a manifest of the bundled files the agent can read via
-    ``read_skill_resource``. This is loaded on demand — never preloaded into every
-    turn — so context stays lean until a skill is actually needed.
-
-    ``mount_path`` is the skill's read-only mount dir inside the sandbox
-    (e.g. ``/mnt/skills/writer``). When known it is stated explicitly so the agent
-    reaches its scripts at the right path instead of guessing one from the id."""
+    """Render host-loaded SKILL.md instructions and optional sandbox guidance."""
     body = package.instructions.strip() or package.description.strip()
     parts = [
         f"# Skill: {package.name} (`{package.capability_id}`)",
@@ -260,23 +225,14 @@ def render_skill_detail(package: SkillPackage, mount_path: Optional[str] = None)
         "",
         body,
     ]
-    files = list_skill_files(package.path)
-    if files:
-        parts.append("")
-        if mount_path:
-            parts.append(
-                f"## Bundled files\nThis skill's files are mounted read-only in the "
-                f"sandbox at `{mount_path}` — run its scripts and `ls`/`cat` them there "
-                f"with shell / code_interpreter (use that exact path, not one built "
-                f"from the skill id). To read a single file host-side instead, use "
-                f'`read_skill_resource("{package.capability_id}", "<path>")`:'
-            )
-        else:
-            parts.append(
-                "## Bundled files\n"
-                f'Read any of these with `read_skill_resource("{package.capability_id}", "<path>")`:'
-            )
-        parts.extend(f"- {rel}" for rel in files)
+    if mount_path:
+        parts.extend([
+            "",
+            "## Sandbox files",
+            f"This skill's bundled files are mounted read-only at `{mount_path}`. "
+            "Use shell or code_interpreter in that exact directory to list, read, "
+            "or run them; start by listing the directory instead of guessing paths.",
+        ])
     return "\n".join(parts)
 
 
@@ -286,7 +242,7 @@ def find_enabled_skill_mount(
     """Resolve a caller-supplied skill id against the enabled mounts on the tool
     scope. Accepts both ``foo`` and ``skill.foo``. Returns the mount dict (with
     ``source_path``) or None when the skill is not enabled for this agent — this
-    is the enablement/authorization gate for load_skill / read_skill_resource."""
+    is the enablement/authorization gate for load_skill."""
     target = _normalize_skill_id(str(skill_id).strip())
     for mount in skill_mounts or []:
         if not isinstance(mount, dict):

@@ -1,11 +1,14 @@
-import sys, os, asyncio
+# ruff: noqa: E402
+import asyncio
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from agent.tools.registry import ToolRegistry
 from agent.tools.skills import load_skills
 from agent.custom_skills import (
     discover_skill_packages,
     find_enabled_skill_mount,
-    list_skill_files,
     render_skill_catalog,
     render_skill_detail,
     resolve_skill_mounts,
@@ -233,30 +236,10 @@ def test_catalog_directs_agent_to_load_skill(tmp_path):
     packages = discover_skill_packages([{"type": "local", "path": str(tmp_path)}])
     catalog = render_skill_catalog(packages=packages, enabled_ids=["skill.alpha"])
     assert "load_skill" in catalog
-    assert "read_skill_resource" in catalog
+    assert "read_skill_resource" not in catalog
 
 
-def test_list_skill_files_lists_bundled_resources_only(tmp_path):
-    skill_dir = tmp_path / "arch"
-    (skill_dir / "resources").mkdir(parents=True)
-    (skill_dir / "SKILL.md").write_text("body", encoding="utf-8")
-    (skill_dir / "skill.yaml").write_text("id: arch\nname: arch\n", encoding="utf-8")
-    (skill_dir / "resources" / "template.html").write_text("<html></html>", encoding="utf-8")
-    (skill_dir / "reference.md").write_text("ref", encoding="utf-8")
-    # Noise that must be skipped.
-    (skill_dir / "__pycache__").mkdir()
-    (skill_dir / "__pycache__" / "x.pyc").write_text("", encoding="utf-8")
-
-    files = list_skill_files(str(skill_dir))
-    assert "resources/template.html" in files
-    assert "reference.md" in files
-    # Manifest/instruction files and junk dirs are excluded.
-    assert "SKILL.md" not in files
-    assert "skill.yaml" not in files
-    assert not any("__pycache__" in f for f in files)
-
-
-def test_render_skill_detail_includes_bundled_file_manifest(tmp_path):
+def test_render_skill_detail_does_not_enumerate_bundled_files(tmp_path):
     skill_dir = tmp_path / "arch"
     (skill_dir / "resources").mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(
@@ -267,27 +250,26 @@ def test_render_skill_detail_includes_bundled_file_manifest(tmp_path):
     packages = discover_skill_packages([{"type": "local", "path": str(tmp_path)}])
     detail = render_skill_detail(packages[0])
     assert "Step one." in detail
-    assert "## Bundled files" in detail
-    assert "resources/template.html" in detail
-    assert 'read_skill_resource("skill.architecture-diagram"' in detail
-    # Without a mount path, no sandbox path is asserted.
+    assert "resources/template.html" not in detail
+    assert "read_skill_resource" not in detail
     assert "/mnt/skills" not in detail
 
 
-def test_render_skill_detail_states_sandbox_mount_path_when_known(tmp_path):
+def test_render_skill_detail_directs_resource_access_to_exact_sandbox_mount(tmp_path):
     skill_dir = tmp_path / "arch"
-    (skill_dir / "resources").mkdir(parents=True)
+    skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text(
         "---\nname: architecture-diagram\ndescription: Draw diagrams.\n---\n\nStep one.\n",
         encoding="utf-8",
     )
-    (skill_dir / "resources" / "template.html").write_text("<html></html>", encoding="utf-8")
     packages = discover_skill_packages([{"type": "local", "path": str(tmp_path)}])
     detail = render_skill_detail(packages[0], mount_path="/mnt/skills/architecture-diagram")
-    # The agent is told the exact read-only mount dir so it does not guess a path.
     assert "/mnt/skills/architecture-diagram" in detail
     assert "read-only" in detail
-    assert "resources/template.html" in detail
+    assert "shell" in detail
+    assert "code_interpreter" in detail
+    assert "list" in detail
+    assert "read_skill_resource" not in detail
 
 
 def test_find_enabled_skill_mount_matches_with_or_without_prefix():
@@ -368,4 +350,3 @@ def test_resolve_skill_mounts_for_skill_md_only_package(tmp_path):
     assert mounts[0].id == "skill.writer"
     assert mounts[0].mount_path == "/mnt/skills/writer"
     assert mounts[0].nas["mountDir"] == "/mnt/skills/writer"
-

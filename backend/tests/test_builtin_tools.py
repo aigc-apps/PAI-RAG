@@ -1236,7 +1236,7 @@ def _scope_with_skill(skill_dir, skill_id="architecture-diagram"):
     )
 
 
-def test_load_skill_returns_full_instructions_and_file_manifest(tmp_path):
+def test_load_skill_returns_instructions_and_sandbox_mount_guidance(tmp_path):
     skill_dir = _make_skill(tmp_path)
     tool = make_load_skill_tool()
     token = set_current_tool_scope(_scope_with_skill(skill_dir))
@@ -1246,7 +1246,10 @@ def test_load_skill_returns_full_instructions_and_file_manifest(tmp_path):
         reset_current_tool_scope(token)
     assert "# Skill: architecture-diagram" in out
     assert "Copy the template at resources/template.html." in out
-    assert "resources/template.html" in out  # bundled-file manifest
+    assert "/mnt/skills/architecture-diagram" in out
+    assert "shell" in out
+    assert "resources/template.html\n-" not in out
+    assert "read_skill_resource" not in out
 
 
 def test_load_skill_accepts_id_without_prefix(tmp_path):
