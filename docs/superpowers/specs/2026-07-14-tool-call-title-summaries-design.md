@@ -56,9 +56,23 @@ Within the existing tool-call trigger:
 1. The localized display name is the primary label.
 2. The raw tool name appears in parentheses with weaker visual emphasis.
 3. The argument summary appears after `·` with the weakest emphasis.
-4. Status and duration retain their existing appearance and behavior.
+4. Status and duration follow the compact alignment rules below.
 
-The trigger stays on one line. The name, status, duration, and chevron do not shrink. The summary occupies the remaining width, truncates with an ellipsis, and exposes its full normalized text through the native hover title.
+The trigger stays on one line. The name, status dot, duration, and chevron do not shrink. The summary occupies the remaining width, truncates with an ellipsis, and exposes its full normalized text through the native hover title.
+
+### Status and Duration
+
+Each row uses the leading status dot as its only visible compact status indicator:
+
+- a pulsing accent-colored dot means running;
+- a green dot means completed;
+- a red dot means failed.
+
+The visible `Running`, `Done`, and `Failed` text beside each tool title is removed because it duplicates the dot and competes with the argument summary. The dot exposes the localized status through an accessible label so state is not conveyed by color alone.
+
+Completed and failed durations occupy a fixed-width, right-aligned, tabular-number column immediately before the chevron. This keeps durations vertically aligned across all tool rows while allowing the argument summary to consume and truncate within the flexible middle region. Running tools have an empty duration column until elapsed time is available.
+
+Failed tools retain the existing red border and tinted background, auto-expand on first render, and show the localized execution-failure card with the concrete error. If the user manually collapses the row, the red dot and error container styling continue to identify the failure.
 
 Argument text is normalized before display by replacing line breaks and runs of whitespace with a single space and trimming the result. The expanded details continue to show the original argument JSON unchanged.
 
@@ -88,6 +102,10 @@ Frontend component tests cover:
 - known tools with no summary;
 - invalid, non-object, missing, and empty arguments;
 - unknown-tool fallback that preserves the raw name only.
+- status-dot accessible labels in both supported languages;
+- removal of redundant visible status text;
+- a fixed-width, right-aligned duration column before the chevron;
+- retained error auto-expansion and visible failure details.
 
 The frontend build and complete frontend test suite must pass after implementation.
 
@@ -96,5 +114,5 @@ The frontend build and complete frontend test suite must pass after implementati
 - Backend-generated display metadata.
 - Translating argument values or raw tool names.
 - Displaying secondary tuning arguments such as timeouts, limits, retrieval modes, or offsets.
-- Changing expanded tool details, status semantics, error auto-expansion, duration display, or stream persistence.
+- Changing expanded tool details, status semantics, error auto-expansion behavior, duration calculation, or stream persistence.
 - Adding display configuration for third-party or dynamically registered custom tools.
