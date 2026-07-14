@@ -182,8 +182,8 @@ def test_app_boots_in_memory_and_serves(monkeypatch, tmp_path):
         assert r.status_code == 200
         body = r.json()
         assert body["object"] == "response" and body["status"] == "completed"
-        # The agent prepends a `[System Time: ...]` prefix to the user turn, so the
-        # echoed text contains "hi" rather than equalling it exactly.
+        # Runtime time is carried by the system prompt, while the user turn remains
+        # user-authored content and is echoed without a synthetic prefix.
         text = body["output"][0]["content"][0]["text"]
         assert text.startswith("echo:")
         assert "hi" in text

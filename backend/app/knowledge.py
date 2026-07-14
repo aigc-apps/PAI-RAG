@@ -59,7 +59,7 @@ DEFAULT_RERANK_CONFIG = {"enabled": False}
 DEFAULT_PARSER_CONFIG = {"chunk_size": 1000, "chunk_overlap": 150}
 DEFAULT_RETRIEVAL_CONFIG = {
     "mode": "hybrid",
-    "top_k": 6,
+    "top_k": 10,
     "score_threshold": 0.0,
     "force_citation": True,
 }
@@ -1000,7 +1000,7 @@ class KnowledgeService:
         user: User,
         kb_ids: list[str],
         query: str,
-        top_k: int = 6,
+        top_k: int = 10,
         offset: int = 0,
         score_threshold: float = 0.0,
         mode: str = "hybrid",
@@ -1015,15 +1015,14 @@ class KnowledgeService:
         if not allowed:
             return [], 0
 
-        limit = max(1, min(int(top_k or 6), 50))
+        limit = max(1, min(int(top_k or 10), 50))
         offset = max(0, int(offset or 0))
         rerank_cfg = dict(rerank_config or {})
         rerank_on = bool(rerank_cfg.get("enabled")) and self._router is not None
-        candidate_pool_size = max(
-            limit + offset,
-            min(200, max(1, int(rerank_cfg.get("candidate_pool_size") or 50))),
-        )
-        fetch_limit = candidate_pool_size if rerank_on else limit + offset
+        # Give every knowledge base an equal opportunity to contribute to the
+        # unified ranking. A single cross-index request lets a large KB crowd a
+        # small, more relevant KB out of the candidate window.
+        per_kb_fetch_limit = max(20, limit + offset)
 
         groups: dict[tuple[str, str, int], list[KnowledgeBaseRow]] = {}
         for kb in allowed:
@@ -1043,35 +1042,36 @@ class KnowledgeService:
                         "operation=query_embedding error_type={} fallback=search_engine",
                         type(ex).__name__,
                     )
-            kwargs = dict(
-                kb_ids=[kb.id for kb in group],
-                query=query,
-                mode=mode,
-                offset=0,
-                limit=fetch_limit,
-                score_threshold=score_threshold,
-                dimension=dimension,
-                filters=filters,
-                query_vector=query_vector,
-            )
-            engine = self._search
-            if engine is self._local:
-                group_hits, group_total = await self._local.search(**kwargs)
-            else:
-                try:
-                    group_hits, group_total = await engine.search(**kwargs)
-                except Exception as ex:
-                    if not self._fallback_to_local:
-                        raise
-                    logger.warning(
-                        "operation=primary_search engine={} error_type={} "
-                        "fallback=local",
-                        getattr(engine, "name", "?"),
-                        type(ex).__name__,
-                    )
-                    group_hits, group_total = await self._local.search(**kwargs)
-            candidates.extend(group_hits)
-            total += group_total
+            for kb in group:
+                kwargs = dict(
+                    kb_ids=[kb.id],
+                    query=query,
+                    mode=mode,
+                    offset=0,
+                    limit=per_kb_fetch_limit,
+                    score_threshold=score_threshold,
+                    dimension=dimension,
+                    filters=filters,
+                    query_vector=query_vector,
+                )
+                engine = self._search
+                if engine is self._local:
+                    kb_hits, kb_total = await self._local.search(**kwargs)
+                else:
+                    try:
+                        kb_hits, kb_total = await engine.search(**kwargs)
+                    except Exception as ex:
+                        if not self._fallback_to_local:
+                            raise
+                        logger.warning(
+                            "operation=primary_search engine={} error_type={} "
+                            "fallback=local",
+                            getattr(engine, "name", "?"),
+                            type(ex).__name__,
+                        )
+                        kb_hits, kb_total = await self._local.search(**kwargs)
+                candidates.extend(kb_hits)
+                total += kb_total
 
         candidates.sort(key=lambda hit: hit.score, reverse=True)
         logger.info(
@@ -1080,17 +1080,52 @@ class KnowledgeService:
             f"{rerank_cfg.get('model') if rerank_on else None}"
         )
         if rerank_on and candidates:
+            candidates = self._cap_chunks_per_document(candidates, max_chunks=3)
             candidates = await self._rerank_hits(
                 query,
-                candidates[:candidate_pool_size],
+                candidates,
                 limit + offset,
                 rerank_cfg,
+                kb_names={kb.id: kb.name for kb in allowed},
             )
         result = candidates[offset : offset + limit]
         logger.info(f"[search] final_results={len(result)} total={total}")
         return result, total
 
-    async def _rerank_hits(self, query, hits, limit, rerank_cfg) -> list[SearchHit]:
+    @staticmethod
+    def _cap_chunks_per_document(
+        hits: list[SearchHit], *, max_chunks: int
+    ) -> list[SearchHit]:
+        counts: dict[tuple[str, str], int] = {}
+        diversified: list[SearchHit] = []
+        for hit in hits:
+            document_key = hit.document_id or hit.chunk_id
+            key = (hit.kb_id, document_key)
+            if counts.get(key, 0) >= max_chunks:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+            diversified.append(hit)
+        return diversified
+
+    @staticmethod
+    def _rerank_document(hit: SearchHit, kb_names: dict[str, str]) -> str:
+        metadata = hit.metadata or {}
+        heading = metadata.get("heading")
+        if not heading and metadata.get("heading_path"):
+            heading = " > ".join(metadata["heading_path"])
+        return "\n".join(
+            [
+                f"Knowledge base: {kb_names.get(hit.kb_id, hit.kb_id)}",
+                f"Document: {hit.title or '(untitled)'}",
+                f"Heading: {heading or '(none)'}",
+                "Content:",
+                hit.text,
+            ]
+        )
+
+    async def _rerank_hits(
+        self, query, hits, limit, rerank_cfg, *, kb_names
+    ) -> list[SearchHit]:
         """Reorder a candidate window with a DashScope reranker, best-effort:
         any failure returns the original order (trimmed). Overwrites each hit's
         ``score`` with the reranker's relevance score."""
@@ -1100,7 +1135,8 @@ class KnowledgeService:
         top_n = int(rerank_cfg.get("top_n") or limit)
         try:
             reranker = self._router.get_reranker(model_id)
-            ranked = await reranker.rerank(query, [h.text for h in hits], top_n=top_n)
+            documents = [self._rerank_document(hit, kb_names) for hit in hits]
+            ranked = await reranker.rerank(query, documents, top_n=top_n)
         except Exception as ex:
             logger.warning(
                 "operation=rerank model={} error_type={} fallback=original_order",

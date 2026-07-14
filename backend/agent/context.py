@@ -1,14 +1,15 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from utils.time_utils import get_current_time_str
+from utils.time_utils import get_current_date_str, get_local_timezone_name
 from agent.message import Message
 
 
 @dataclass
 class RunVars:
-    """Runtime values rendered into the current turn (e.g. the time header)."""
-    current_datetime: str = field(default_factory=get_current_time_str)
+    """Slow-changing environment values appended to the stable system prompt."""
+    current_date: str = field(default_factory=get_current_date_str)
+    timezone: str = field(default_factory=get_local_timezone_name)
 
 
 @dataclass

@@ -30,7 +30,7 @@ const parserOf = (kb: KnowledgeBase) => ({
 });
 const retrievalOf = (kb: KnowledgeBase) => ({
   mode: (kb.default_retrieval_config?.mode ?? "hybrid") as "hybrid" | "vector" | "keyword",
-  top_k: num(kb.default_retrieval_config?.top_k, 6),
+  top_k: num(kb.default_retrieval_config?.top_k, 10),
   score_threshold: num(kb.default_retrieval_config?.score_threshold, 0),
   force_citation: kb.default_retrieval_config?.force_citation ?? true,
 });

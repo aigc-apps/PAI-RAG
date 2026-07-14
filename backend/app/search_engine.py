@@ -93,7 +93,7 @@ class SearchEngine(Protocol):
     async def health_detail(self) -> tuple[bool, str]: ...
     async def search(
         self, *, kb_ids: list[str], query: str, mode: str = "hybrid",
-        offset: int = 0, limit: int = 6, score_threshold: float = 0.0,
+        offset: int = 0, limit: int = 10, score_threshold: float = 0.0,
         dimension: int = 64, filters: Optional[dict] = None,
         query_vector: Optional[list[float]] = None,
     ) -> tuple[list[SearchHit], int]: ...
@@ -123,7 +123,7 @@ class LocalSearchEngine:
         return True, "本地引擎（内置，无需外部连接）"
 
     async def search(
-        self, *, kb_ids, query, mode="hybrid", offset=0, limit=6,
+        self, *, kb_ids, query, mode="hybrid", offset=0, limit=10,
         score_threshold=0.0, dimension=64, filters=None, query_vector=None,
     ) -> tuple[list[SearchHit], int]:
         # Imported lazily to avoid an import cycle (knowledge imports this module
@@ -187,6 +187,8 @@ class LocalSearchEngine:
                         "category": doc.category,
                         "chunk_index": chunk.chunk_index,
                         **(chunk.chunk_metadata or {}),
+                        "heading": heading,
+                        "heading_path": list(chunk.heading_path or []),
                     },
                 )
             )
@@ -480,7 +482,7 @@ class ElasticsearchEngine:
         return clauses
 
     async def search(
-        self, *, kb_ids, query, mode="hybrid", offset=0, limit=6,
+        self, *, kb_ids, query, mode="hybrid", offset=0, limit=10,
         score_threshold=0.0, dimension=64, filters=None, query_vector=None,
     ) -> tuple[list[SearchHit], int]:
         filters = filters or {}
@@ -536,6 +538,7 @@ class ElasticsearchEngine:
                     keyword_score=0.0,
                     metadata={
                         "chunk_index": src.get("chunk_index"),
+                        "heading": src.get("heading", ""),
                         "tags": src.get("tags", []),
                         "category": src.get("category"),
                     },

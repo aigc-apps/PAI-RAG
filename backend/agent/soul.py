@@ -106,10 +106,19 @@ _WEB_SEARCH_GUIDANCE = (
 # guidance — grounding, citation discipline, and the references section all live
 # here, so there is no separate knowledge_qa skill to enable.
 _KNOWLEDGE_GUIDANCE = (
-    "A knowledge base of ingested documents is available. Before answering a "
-    "question its contents could cover, search it and ground your answer in what "
-    "you find, citing the source; if it does not contain the answer, say so plainly "
-    "rather than guessing. Use knowledge_search for meaning/keyword queries; it "
+    "A knowledge base of ingested documents is available. Before answering "
+    "questions about product behavior, configuration, procedures, APIs, error "
+    "messages or codes, troubleshooting, policies, or other facts that may be "
+    "documented in the configured knowledge bases, call knowledge_search first "
+    "and ground your answer in what you find. Do not search for greetings, identity "
+    "questions, casual conversation, or pure writing or translation tasks unless "
+    "they depend on documented facts. When forming the search query, retain product "
+    "or service names, exact error identifiers, API names, and configuration keys "
+    "from the current request and conversation. For example, search "
+    "\"TurboX license_check 失败\" rather than reducing it to the generic "
+    "\"license check 失败\". If the knowledge base does not contain the "
+    "answer, say so plainly rather than guessing. knowledge_search handles meaning "
+    "and keyword queries; it "
     "searches every accessible base at once unless you pass kb_ids. Prefer it over "
     "your own recall for anything the docs could cover. When your answer draws on "
     "knowledge-base documents, end it with a references section — headed in the "

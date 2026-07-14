@@ -110,7 +110,7 @@ class ImportTextDocumentPayload(BaseModel):
 class SearchPayload(BaseModel):
     kb_ids: list[str]
     query: str
-    top_k: int = 6
+    top_k: int = 10
     offset: int = 0
     score_threshold: float = 0.0
     mode: str = "hybrid"

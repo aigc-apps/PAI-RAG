@@ -1,5 +1,9 @@
-import sys, os
+# ruff: noqa: E402
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from app.store.memory import InMemoryStore
@@ -70,8 +74,8 @@ def test_get_conversation_reconstructs_messages_and_latest_id():
     roles = [m["role"] for m in detail["messages"]]
     assert roles == ["user", "assistant", "user", "assistant"]
     assert detail["messages"][0]["text"] == "q1"
-    # The agent prepends a "[System Time: ...]\n" header to the rendered user turn,
-    # so the echo carries that prefix + the input.
+    # Runtime time is carried by the system prompt; the rendered user turn remains
+    # user-authored content, so the echo ends with the original input.
     assert detail["messages"][1]["text"].startswith("echo:") and detail["messages"][1]["text"].endswith("q1")
     assert detail["messages"][3]["previous_response_id"] == first["id"]
 

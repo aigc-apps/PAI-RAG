@@ -104,6 +104,31 @@ def test_knowledge_guidance_only_when_knowledge_search_present():
     assert "never expose" in with_aux
 
 
+def test_knowledge_guidance_defines_concrete_search_and_skip_categories():
+    out = render_stable_system_prompt(PERSONA, tool_names=["knowledge_search"])
+
+    for category in (
+        "product behavior",
+        "configuration",
+        "procedures",
+        "APIs",
+        "error messages or codes",
+        "troubleshooting",
+        "policies",
+    ):
+        assert category in out
+    for skip in (
+        "greetings",
+        "identity questions",
+        "casual conversation",
+        "writing or translation tasks",
+    ):
+        assert skip in out
+    assert "call knowledge_search first" in out
+    assert "product or service names" in out
+    assert "TurboX license_check 失败" in out
+
+
 def test_sandbox_guidance_when_code_interpreter_or_shell_present():
     assert "runs real code" not in render_stable_system_prompt(
         PERSONA, tool_names=["web_fetch"])

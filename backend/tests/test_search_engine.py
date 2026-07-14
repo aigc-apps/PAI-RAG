@@ -216,7 +216,8 @@ def test_es_hybrid_search_dsl_has_knn_and_bm25():
                 {"_id": "c1", "_score": 3.2, "_source": {
                     "kb_id": "kb_test", "document_id": "doc_1", "chunk_id": "c1",
                     "title": "安装指南", "source_uri": "docs/install", "source_type": "text",
-                    "text": "安装步骤", "chunk_index": 0, "tags": ["pai"], "category": "guide",
+                    "text": "安装步骤", "heading": "FAQ > license_check",
+                    "chunk_index": 0, "tags": ["pai"], "category": "guide",
                 }},
             ],
         }
@@ -244,6 +245,7 @@ def test_es_hybrid_search_dsl_has_knn_and_bm25():
     assert total == 7
     assert hits[0].chunk_id == "c1"
     assert hits[0].title == "安装指南"
+    assert hits[0].metadata["heading"] == "FAQ > license_check"
     assert hits[0].score == 3.2
 
 

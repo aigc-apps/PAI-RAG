@@ -21,6 +21,7 @@ import app.knowledge as knowledge_module
 from app.db import create_all, make_engine
 from app.knowledge import KnowledgeService
 from app.providers import ModelCatalog, ModelSpec, ProviderConfig, ProviderRouter
+from app.search_engine import SearchHit
 from app.store.base import User
 
 ADMIN = User(id="u_admin", email="a@x.io", role="admin")
@@ -118,7 +119,10 @@ def test_rerank_reorders_when_enabled():
     query, candidate_docs, top_n = reranker.calls[-1]
     assert query == "shared" and top_n == 3 and len(candidate_docs) == 3
     # the fake reranker reverses its input; final hit order must follow that
-    assert [h.text for h in hits] == list(reversed(candidate_docs))
+    assert [h.text for h in hits] == [
+        document.rsplit("Content:\n", 1)[-1]
+        for document in reversed(candidate_docs)
+    ]
     # rerank relevance score is written onto the hits (descending)
     assert base_scores_descending(hits)
 
@@ -212,6 +216,115 @@ def test_multi_kb_search_queries_each_embedding_group_then_reranks_once():
     assert len(reranker.calls) == 1
     assert {hit.kb_id for hit in hits} == {kb_a.id, kb_b.id}
     assert base_scores_descending(hits)
+
+
+class RecordingSearchEngine:
+    name = "elasticsearch"
+
+    def __init__(self, hits_by_kb):
+        self.hits_by_kb = hits_by_kb
+        self.calls = []
+
+    async def ensure_index(self, kb):
+        return None
+
+    async def index_chunks(self, kb, doc, chunks):
+        return None
+
+    async def search(self, **kwargs):
+        self.calls.append(kwargs)
+        kb_id = kwargs["kb_ids"][0]
+        hits = self.hits_by_kb.get(kb_id, [])
+        return hits[: kwargs["limit"]], len(hits)
+
+
+def _hit(*, kb_id, document_id, chunk_id, title, text, score, heading=""):
+    return SearchHit(
+        kb_id=kb_id,
+        document_id=document_id,
+        chunk_id=chunk_id,
+        title=title,
+        source_uri="",
+        source_type="text",
+        text=text,
+        score=score,
+        vector_score=score,
+        keyword_score=score,
+        metadata={"heading": heading},
+    )
+
+
+def test_rerank_recalls_twenty_candidates_from_each_kb_independently():
+    async def scenario():
+        router = _chat_router()
+        router.register_llm("dashscope/rr", FakeReranker())
+        engine = RecordingSearchEngine({})
+        svc = await _svc(router)
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb_a = await svc.create_kb(user=ADMIN, name="TurboX", visibility="public")
+        kb_b = await svc.create_kb(user=ADMIN, name="PAI Docs", visibility="public")
+        engine.hits_by_kb = {
+            kb_a.id: [_hit(kb_id=kb_a.id, document_id="a", chunk_id="a1", title="A", text="a", score=0.9)],
+            kb_b.id: [_hit(kb_id=kb_b.id, document_id="b", chunk_id="b1", title="B", text="b", score=0.8)],
+        }
+        await svc.search(
+            user=ADMIN,
+            kb_ids=[kb_a.id, kb_b.id],
+            query="TurboX license_check 失败",
+            rerank_config={"enabled": True, "model": "dashscope/rr"},
+        )
+        return engine.calls, kb_a, kb_b
+
+    calls, kb_a, kb_b = asyncio.run(scenario())
+    assert [call["kb_ids"] for call in calls] == [[kb_a.id], [kb_b.id]]
+    assert [call["limit"] for call in calls] == [20, 20]
+
+
+def test_rerank_caps_document_chunks_and_receives_kb_title_and_heading():
+    async def scenario():
+        router = _chat_router()
+        reranker = FakeReranker()
+        router.register_llm("dashscope/rr", reranker)
+        engine = RecordingSearchEngine({})
+        svc = await _svc(router)
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb = await svc.create_kb(user=ADMIN, name="TurboX KB", visibility="public")
+        repeated = [
+            _hit(
+                kb_id=kb.id,
+                document_id="manual",
+                chunk_id=f"manual-{index}",
+                title="PAI-TurboX 使用手册",
+                heading="FAQ > license_check",
+                text=f"license body {index}",
+                score=1.0 - index / 100,
+            )
+            for index in range(5)
+        ]
+        engine.hits_by_kb = {
+            kb.id: repeated
+            + [_hit(kb_id=kb.id, document_id="other", chunk_id="other-1", title="Other", text="other body", score=0.5)]
+        }
+        await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query="TurboX license_check 失败",
+            top_k=10,
+            rerank_config={"enabled": True, "model": "dashscope/rr"},
+        )
+        return reranker.calls[-1]
+
+    _query, documents, _top_n = asyncio.run(scenario())
+    assert len([document for document in documents if "PAI-TurboX 使用手册" in document]) == 3
+    assert any(
+        "Knowledge base: TurboX KB" in document
+        and "Document: PAI-TurboX 使用手册" in document
+        and "Heading: FAQ > license_check" in document
+        and "Content:\nlicense body" in document
+        for document in documents
+    )
 
 
 def test_query_embedding_fallback_redacts_exception_message(monkeypatch):
@@ -382,6 +495,15 @@ def test_create_kb_falls_back_to_local_without_embedding_model():
     kb = asyncio.run(scenario())
     assert kb.embedding_config["provider_id"] == "local_hash"
     assert kb.embedding_config["dimension"] == 64
+
+
+def test_create_kb_defaults_retrieval_top_k_to_ten():
+    async def scenario():
+        svc = await _svc()
+        return await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+
+    kb = asyncio.run(scenario())
+    assert kb.default_retrieval_config["top_k"] == 10
 
 
 class FakeSearchEngine:

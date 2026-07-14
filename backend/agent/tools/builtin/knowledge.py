@@ -31,7 +31,7 @@ from agent.tools.scope import (
 
 # A chunk can be long; the model only needs enough to ground an answer and cite.
 _MAX_SNIPPET_CHARS = 700
-_DEFAULT_TOP_K = 6
+_DEFAULT_TOP_K = 10
 
 
 def _tool_failure(operation: str, ex: Exception) -> str:
@@ -161,18 +161,28 @@ def make_knowledge_search_tool(knowledge_service) -> Tool:
     return Tool(
         name="knowledge_search",
         description=(
-            "Search the configured knowledge base(s) for passages relevant to a "
-            "question and return ranked snippets with their sources. Use this to "
-            "answer questions grounded in ingested documentation before relying on "
-            "general knowledge. Searches every knowledge base you can access unless "
-            "'kb_ids' is given."
+            "Search configured knowledge bases and return ranked passages with "
+            "sources. Before answering questions about product behavior, "
+            "configuration, procedures, APIs, error messages or codes, "
+            "troubleshooting, policies, or other potentially documented facts, "
+            "call knowledge_search first. Do not search for greetings, identity "
+            "questions, casual conversation, or pure writing or translation tasks "
+            "unless they depend on documented facts. Build a specific query that "
+            "retains product or service names, exact error identifiers, API names, "
+            "and configuration keys from the conversation; for example, search "
+            "'TurboX license_check 失败' rather than the generic 'license check 失败'. "
+            "Searches every accessible "
+            "knowledge base unless 'kb_ids' is given."
         ),
         parameters={
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "Natural-language question or keywords to retrieve on.",
+                    "description": (
+                        "Natural-language question or keywords. Retain product or "
+                        "service names and exact identifiers from the conversation."
+                    ),
                 },
                 "kb_ids": {
                     "type": "array",

@@ -1,8 +1,11 @@
+# ruff: noqa: E402
 # tests/app/test_routes_responses.py
-import sys, os
+import os
+import re
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-import json
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from app.store.memory import InMemoryStore
@@ -83,10 +86,10 @@ def test_post_sync_creates_and_persists_response():
     assert r.status_code == 200
     body = r.json()
     assert body["object"] == "response" and body["status"] == "completed"
-    # The agent prepends a "[System Time: ...]\n" header to the rendered user
-    # turn (render_current_turn), so the echo carries that prefix + the input.
+    # Runtime time now lives in the single system prompt, so the user-authored
+    # content reaches the model unchanged.
     text = body["output"][0]["content"][0]["text"]
-    assert text.startswith("echo:") and text.endswith("hello")
+    assert text == "echo:hello"
     rid = body["id"]
     got = c.get(f"/v1/responses/{rid}")
     assert got.status_code == 200 and got.json()["id"] == rid
@@ -142,7 +145,6 @@ def test_stream_path_persists_and_is_retrievable():
         assert r.status_code == 200
         raw = "".join(chunk for chunk in r.iter_text())
     # extract the response id from the SSE payloads
-    import json, re
     ids = re.findall(r'"id":\s*"(resp_[1-9A-HJ-NP-Za-km-z]+)"', raw)
     assert ids, "no response id in stream"
     rid = ids[0]

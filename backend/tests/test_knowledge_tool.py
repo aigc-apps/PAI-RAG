@@ -21,6 +21,20 @@ from app.knowledge import KnowledgeService
 from app.store.base import User
 
 
+def test_knowledge_search_description_matches_prompt_trigger_contract():
+    tool = make_knowledge_search_tool(object())
+
+    assert "Before answering" in tool.description
+    assert "call knowledge_search first" in tool.description
+    assert "error messages or codes" in tool.description
+    assert "troubleshooting" in tool.description
+    assert "Do not search" in tool.description
+    assert "greetings" in tool.description
+    assert "identity questions" in tool.description
+    assert "product or service names" in tool.description
+    assert "TurboX license_check 失败" in tool.description
+
+
 ALICE = User(id="u_alice", email="alice@x.io", role="user")
 BOB = User(id="u_bob", email="bob@x.io", role="user")
 
@@ -182,6 +196,30 @@ def test_knowledge_search_forwards_agent_rerank_and_logs_resolved_kbs():
     assert "'top_k': 10" in line
     assert "'mode': 'keyword'" in line
     assert all(sentinel_query not in message for message in messages)
+
+
+def test_knowledge_search_defaults_to_ten_results():
+    async def scenario():
+        svc, _pub, _priv = await _seed()
+        calls = []
+        original_search = svc.search
+
+        async def recording_search(**kwargs):
+            calls.append(kwargs)
+            return await original_search(**kwargs)
+
+        svc.search = recording_search
+        tool = make_knowledge_search_tool(svc)
+        await tool.fn(query="安装 PAI")
+        return calls[-1]["top_k"]
+
+    token = set_current_tool_scope(ToolScope(user_id=ALICE.id, metadata={"role": "user"}))
+    try:
+        top_k = asyncio.run(scenario())
+    finally:
+        reset_current_tool_scope(token)
+
+    assert top_k == 10
 
 
 def test_knowledge_search_soft_default_cannot_leak_forbidden_kb():

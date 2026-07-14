@@ -6,7 +6,7 @@ from typing import AsyncIterator, List, Optional
 
 from loguru import logger
 
-from agent.context import AgentContext, Attachment, RunVars
+from agent.context import AgentContext, Attachment
 from agent.message import Message
 from agent.budgeting import AgentMessageManager
 from agent.message import ToolCall
@@ -120,10 +120,12 @@ def _format_attachments(attachments: List[Attachment]) -> str:
 
 
 def render_current_turn(turn: Message, attachments: List[Attachment],
-                        hints: List[str], run_vars: RunVars) -> Message:
-    """Assemble the live user turn: time header + user text + attachment blocks + hints.
-    The ONLY place these are combined. Handles both str and multimodal-list content."""
-    prefix = f"[System Time: {run_vars.current_datetime}]\n"
+                        hints: List[str]) -> Message:
+    """Assemble user-authored content, attachments, and per-turn user hints.
+
+    Runtime metadata is injected separately; keeping it out of this message
+    preserves the original user content for both text and multimodal turns.
+    """
     suffix = _format_attachments(attachments)
     if hints:
         suffix += "\n\n" + "\n\n".join(hints)
@@ -132,14 +134,29 @@ def render_current_turn(turn: Message, attachments: List[Attachment],
         parts = [dict(p) for p in turn.content]
         for p in parts:
             if p.get("type") == "text":
-                p["text"] = prefix + (p.get("text") or "") + suffix
+                p["text"] = (p.get("text") or "") + suffix
                 break
         else:
-            parts.insert(0, {"type": "text", "text": prefix + suffix})
+            parts.insert(0, {"type": "text", "text": suffix})
         return Message(role="user", content=parts)
 
     base = turn.content or ""
-    return Message(role="user", content=prefix + base + suffix)
+    return Message(role="user", content=base + suffix)
+
+
+def _render_runtime_context(context_block: str) -> Message:
+    """Append volatile context at the conversation tail without changing system.
+
+    This follows Claude Code's cache-friendly ``<system-reminder>`` pattern. The
+    block is assembled by the host and never persisted as a user-authored turn.
+    """
+    safe_block = context_block.strip().replace(
+        "</system-reminder>", "</system_reminder>"
+    )
+    return Message(
+        role="user",
+        content=f"<system-reminder>\n{safe_block}\n</system-reminder>",
+    )
 
 
 class Agent:
@@ -154,12 +171,27 @@ class Agent:
 
     @staticmethod
     def build_messages(ctx: AgentContext) -> List[Message]:
-        msgs: List[Message] = [Message("system", ctx.system_prompt)]
+        # Keep the system prefix stable within a day. Exact wall-clock time belongs
+        # behind current_datetime; adding seconds here would invalidate the entire
+        # provider prompt cache on every turn.
+        environment = (
+            "# Environment\n"
+            f"Today's date: {ctx.run_vars.current_date}\n"
+            f"Time zone: {ctx.run_vars.timezone}"
+        )
+        if ctx.tools is not None and ctx.tools.get("current_datetime") is not None:
+            environment += (
+                "\nFor the exact current date or time, call current_datetime."
+            )
+        system_parts = [
+            ctx.system_prompt.strip(),
+            environment,
+        ]
+        msgs: List[Message] = [Message("system", "\n\n".join(system_parts))]
         msgs += ctx.history
-        block = ctx.context_block
-        if block:
-            msgs.append(Message("system", block))
-        msgs.append(render_current_turn(ctx.current_turn, ctx.attachments, ctx.hints, ctx.run_vars))
+        if ctx.context_block.strip():
+            msgs.append(_render_runtime_context(ctx.context_block))
+        msgs.append(render_current_turn(ctx.current_turn, ctx.attachments, ctx.hints))
         logger.info("[agent] model input: {} msgs", len(msgs))
         return msgs
 
