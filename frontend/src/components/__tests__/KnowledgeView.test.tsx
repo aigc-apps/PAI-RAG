@@ -7,12 +7,14 @@ import type { KnowledgeBase } from "../../api/knowledge";
 
 const listKnowledgeBases = vi.fn();
 const listDataSources = vi.fn();
+const listKnowledgeDocuments = vi.fn();
 const searchKnowledge = vi.fn();
 const updateKnowledgeBase = vi.fn();
 vi.mock("../../api/knowledge", async (importActual) => ({
   ...(await importActual<typeof import("../../api/knowledge")>()),
   listKnowledgeBases: () => listKnowledgeBases(),
   listDataSources: () => listDataSources(),
+  listKnowledgeDocuments: (...args: unknown[]) => listKnowledgeDocuments(...args),
   searchKnowledge: (...args: unknown[]) => searchKnowledge(...args),
   updateKnowledgeBase: (...args: unknown[]) => updateKnowledgeBase(...args),
 }));
@@ -49,12 +51,57 @@ beforeEach(() => {
   listKnowledgeBases.mockResolvedValue([kb]);
   listDataSources.mockReset();
   listDataSources.mockResolvedValue([]);
+  listKnowledgeDocuments.mockReset();
+  listKnowledgeDocuments.mockResolvedValue({
+    data: [], total: 0, offset: 0, limit: 50, has_more: false,
+  });
   searchKnowledge.mockReset();
   updateKnowledgeBase.mockReset();
   updateKnowledgeBase.mockResolvedValue(kb);
 });
 
 describe("KnowledgeView routes", () => {
+  it("keeps the embedded documents workspace readable at wide settings widths", async () => {
+    listKnowledgeDocuments.mockResolvedValue({
+      data: [{
+        id: "doc_1",
+        kb_id: "kb_1",
+        uri: "https://docs.example.com/products/turbox/production/deployment-guide",
+        source_type: "website",
+        title: "PAI-TurboX：面向生产环境的完整部署与故障排查指南",
+        description: "Production deployment guide",
+        status: "indexed",
+        tags: ["PAI-TurboX", "production"],
+        chunk_count: 54,
+        indexed_at: "2026-07-14T00:00:00Z",
+      }],
+      total: 1, offset: 0, limit: 50, has_more: false,
+    });
+
+    render(
+      <KnowledgeView
+        onBack={vi.fn()}
+        kbId="kb_1"
+        tab="files"
+        embedded
+        onOpenKb={vi.fn()}
+        onBackToList={vi.fn()}
+        onTabChange={vi.fn()}
+        onInvalidKb={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByTestId("knowledge-documents-table")).toHaveClass(
+      "min-w-[940px]",
+      "table-fixed",
+    );
+    expect(screen.getByTestId("knowledge-embedded-detail")).toHaveClass("min-w-0");
+    expect(screen.getByTestId("knowledge-tabbar")).toHaveClass("overflow-x-auto");
+    expect(screen.getByTestId("knowledge-document-title-cell")).toHaveClass(
+      "min-w-[300px]",
+    );
+  });
+
   it("opens a routed KB tab and reports tab navigation", async () => {
     useI18nStore.getState().setLang("en");
     const onTabChange = vi.fn();

@@ -137,6 +137,28 @@ button:disabled {
   padding: 24px 28px 64px;
 }
 
+.settings-layout {
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
+  padding: 24px 32px 64px;
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+
+.settings-nav {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+}
+
+.settings-reading-pane {
+  width: 100%;
+  max-width: 960px;
+}
+
 .professional-card {
   border: 1px solid var(--border);
   background: var(--bg-elevated);
@@ -188,6 +210,32 @@ button:disabled {
   }
   .workspace-container {
     padding: 20px 16px 56px;
+  }
+}
+
+@media (max-width: 1279px) {
+  .settings-layout {
+    padding-inline: 24px;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    position: static;
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 767px) {
+  .settings-layout {
+    padding: 20px 16px 48px;
   }
 }
 

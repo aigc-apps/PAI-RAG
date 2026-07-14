@@ -489,15 +489,18 @@ function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted, em
   );
 
   const tabBar = (
-    <div className={cn(
-      "flex flex-shrink-0 items-center gap-1 border-b border-[var(--border)] px-4",
-      !embedded && "bg-[var(--bg-elevated)]/84 backdrop-blur"
-    )}>
+    <div
+      data-testid="knowledge-tabbar"
+      className={cn(
+        "flex flex-shrink-0 items-center gap-1 overflow-x-auto border-b border-[var(--border)] px-4",
+        !embedded && "bg-[var(--bg-elevated)]/84 backdrop-blur"
+      )}
+    >
       {tabs.map((tb) => (
         <button
           key={tb.id} type="button" onClick={() => onTabChange(tb.id)}
           className={cn(
-            "-mb-px border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+            "-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
             tab === tb.id
               ? "border-[var(--accent)] text-[var(--text)]"
               : "border-transparent text-[var(--text-muted)] hover:text-[var(--text)]"
@@ -506,8 +509,8 @@ function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted, em
           {tb.label}{typeof tb.badge === "number" && <span className="ml-1 text-[var(--text-faint)]">{tb.badge}</span>}
         </button>
       ))}
-      <div className="flex-1" />
-      <button type="button" onClick={remove} className={cn(ICON_BTN, "hover:text-[var(--danger)]")} title={t("kbview.deleteKb")}>
+      <div className="min-w-2 flex-1" />
+      <button type="button" onClick={remove} className={cn(ICON_BTN, "shrink-0 hover:text-[var(--danger)]")} title={t("kbview.deleteKb")}>
         <Trash2 className="h-4 w-4" />
       </button>
     </div>
@@ -525,7 +528,7 @@ function KbDetail({ kb, tab, onTabChange, onBackToList, onChanged, onDeleted, em
 
   if (embedded) {
     return (
-      <div className="text-[var(--text)]">
+      <div data-testid="knowledge-embedded-detail" className="min-w-0 text-[var(--text)]">
         {/* Compact breadcrumb in place of the full-page PageHeader — Settings
             already renders its own header above the panel. */}
         <div className="mb-3 flex items-center text-sm text-[var(--text-muted)]">
@@ -1189,28 +1192,43 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
           <div className="p-8 text-center text-sm text-[var(--text-muted)]">{q ? t("kbview.noMatchDocs") : t("kbview.noDocs")}</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13px]">
+            <table
+              data-testid="knowledge-documents-table"
+              className="w-full min-w-[940px] table-fixed border-collapse text-[13px]"
+            >
+              <colgroup>
+                <col />
+                <col className="w-[84px]" />
+                <col className="w-[92px]" />
+                <col className="w-[64px]" />
+                <col className="w-[180px]" />
+                <col className="w-[104px]" />
+                <col className="w-[88px]" />
+              </colgroup>
               <thead>
                 <tr className="text-left text-[11px] font-semibold tracking-wide text-[var(--text-faint)] uppercase">
                   <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.colTitle")}</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.colSource")}</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.statusLabel")}</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2 text-right">{t("kbview.colChunks")}</th>
+                  <th className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2">{t("kbview.colSource")}</th>
+                  <th className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2">{t("kbview.statusLabel")}</th>
+                  <th className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2 text-right">{t("kbview.colChunks")}</th>
                   <th className="border-b border-[var(--border)] px-3 py-2">{t("kbview.colTags")}</th>
-                  <th className="border-b border-[var(--border)] px-3 py-2 text-right">{t("kbview.colIndexedAt")}</th>
+                  <th className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2 text-right">{t("kbview.colIndexedAt")}</th>
                   <th className="border-b border-[var(--border)] px-3 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {docs.map((d) => (
                   <tr key={d.id} className="group hover:bg-[var(--surface)]">
-                    <td className="border-b border-[var(--border)] px-3 py-2.5">
-                      <div className="font-medium">{d.title}</div>
-                      <div className="max-w-[280px] truncate font-mono text-[11px] text-[var(--text-faint)]">{d.uri}</div>
+                    <td
+                      data-testid="knowledge-document-title-cell"
+                      className="min-w-[300px] border-b border-[var(--border)] px-3 py-2.5"
+                    >
+                      <div className="truncate font-medium" title={d.title}>{d.title}</div>
+                      <div className="max-w-full truncate font-mono text-[11px] text-[var(--text-faint)]" title={d.uri}>{d.uri}</div>
                     </td>
-                    <td className="border-b border-[var(--border)] px-3 py-2.5"><Pill status={d.source_type} /></td>
-                    <td className="border-b border-[var(--border)] px-3 py-2.5"><Pill status={d.status} /></td>
-                    <td className="border-b border-[var(--border)] px-3 py-2.5 text-right tabular-nums">{d.chunk_count}</td>
+                    <td className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2.5"><Pill status={d.source_type} /></td>
+                    <td className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2.5"><Pill status={d.status} /></td>
+                    <td className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2.5 text-right tabular-nums">{d.chunk_count}</td>
                     <td className="border-b border-[var(--border)] px-3 py-2.5">
                       <div className="flex flex-wrap gap-1">
                         {(d.tags || []).slice(0, 3).map((tg) => (
@@ -1218,7 +1236,7 @@ function FilesPanel({ kb, onChanged }: { kb: KnowledgeBase; onChanged: () => Pro
                         ))}
                       </div>
                     </td>
-                    <td className="border-b border-[var(--border)] px-3 py-2.5 text-right text-[var(--text-faint)]">{fmtTime(t, d.indexed_at)}</td>
+                    <td className="whitespace-nowrap border-b border-[var(--border)] px-3 py-2.5 text-right text-[var(--text-faint)]">{fmtTime(t, d.indexed_at)}</td>
                     <td className="border-b border-[var(--border)] px-3 py-2.5">
                       <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100">
                         <button className={ICON_BTN} title={t("kbview.viewChunks")} onClick={() => setViewDoc(d)}><Eye className="h-4 w-4" /></button>

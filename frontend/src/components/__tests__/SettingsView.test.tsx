@@ -649,6 +649,34 @@ describe("SettingsView", () => {
     expect(screen.queryByTitle("模型 — 就绪")).not.toBeInTheDocument();
   });
 
+  it("uses the balanced wide settings workspace", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    expect(screen.getByTestId("settings-layout")).toHaveClass("settings-layout");
+    expect(screen.getByTestId("settings-navigation")).toHaveClass("settings-nav");
+    expect(screen.getByTestId("settings-content")).not.toHaveClass(
+      "settings-reading-pane"
+    );
+
+    await user.click(screen.getByRole("button", { name: "默认人格" }));
+    expect(screen.getByTestId("settings-content")).toHaveClass(
+      "settings-reading-pane"
+    );
+  });
+
+  it("keeps agent summary cards equal height in the wide workspace", () => {
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    expect(screen.getByTestId("agent-summary-grid")).toHaveClass(
+      "md:grid-cols-2",
+      "xl:grid-cols-3"
+    );
+    for (const card of screen.getAllByTestId("agent-summary-card")) {
+      expect(card).toHaveClass("h-full");
+    }
+  });
+
   it("scopes an agent to a subset of knowledge bases", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);

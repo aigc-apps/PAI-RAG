@@ -306,6 +306,7 @@ export function SettingsView({
     { id: "org-persona", label: t("settings.navDefaultPersona"), subtle: true },
     { id: "yaml", label: t("settings.navYaml"), subtle: true },
   ];
+  const readingPane = tab === "org-persona" || tab === "yaml";
 
   return (
     <div className="workspace-page flex h-full flex-col text-[var(--text)]">
@@ -317,9 +318,13 @@ export function SettingsView({
       />
 
       <main
-        className="mx-auto grid w-full max-w-[1160px] flex-1 grid-cols-[196px_1fr] gap-6 overflow-y-auto px-7 py-6 max-lg:grid-cols-1 max-md:px-4 max-md:py-5"
+        data-testid="settings-layout"
+        className="settings-layout min-h-0 flex-1 overflow-y-auto"
       >
-        <aside className="space-y-1 max-lg:flex max-lg:gap-1 max-lg:overflow-x-auto max-lg:pb-1">
+        <aside
+          data-testid="settings-navigation"
+          className="settings-nav space-y-1 max-lg:space-y-0 max-lg:pb-1"
+        >
           {tabs.map((item, index) => {
             return (
               <button
@@ -345,7 +350,10 @@ export function SettingsView({
           })}
         </aside>
 
-        <section className="min-w-0">
+        <section
+          data-testid="settings-content"
+          className={cn("min-w-0", readingPane && "settings-reading-pane")}
+        >
           {tab === "agents" && agent && (
             <AgentsPanel
               doc={doc}
@@ -1145,7 +1153,10 @@ function PreviewCard({
 }) {
   const { t } = useI18n();
   return (
-    <div className={cn(CARD, "professional-card-hover p-[18px]")}>
+    <div
+      data-testid="agent-summary-card"
+      className={cn(CARD, "professional-card-hover h-full p-[18px]")}
+    >
       <div className="mb-3 flex items-center gap-2 text-[var(--text-muted)]">
         {icon}
         <h3 className="text-[15px] font-semibold text-[var(--text)]">{title}</h3>
@@ -1434,7 +1445,10 @@ function AgentsPanel({
         </PreviewCard>
 
         {/* Capabilities — tools / skills / knowledge, previewing example names. */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div
+          data-testid="agent-summary-grid"
+          className="grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3"
+        >
           <PreviewCard
             icon={<Wrench className="h-4 w-4" />}
             title={t("settings.capabilities")}
