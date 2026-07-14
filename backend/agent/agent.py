@@ -144,21 +144,6 @@ def render_current_turn(turn: Message, attachments: List[Attachment],
     return Message(role="user", content=base + suffix)
 
 
-def _render_runtime_context(context_block: str) -> Message:
-    """Append volatile context at the conversation tail without changing system.
-
-    This follows Claude Code's cache-friendly ``<system-reminder>`` pattern. The
-    block is assembled by the host and never persisted as a user-authored turn.
-    """
-    safe_block = context_block.strip().replace(
-        "</system-reminder>", "</system_reminder>"
-    )
-    return Message(
-        role="user",
-        content=f"<system-reminder>\n{safe_block}\n</system-reminder>",
-    )
-
-
 class Agent:
     def __init__(self, llm, max_steps: int = MAX_RECURSION_STEPS,
                  budget: Optional[AgentMessageManager] = None):
@@ -187,10 +172,11 @@ class Agent:
             ctx.system_prompt.strip(),
             environment,
         ]
+        if ctx.context_block.strip():
+            system_parts.append(ctx.context_block.strip())
+
         msgs: List[Message] = [Message("system", "\n\n".join(system_parts))]
         msgs += ctx.history
-        if ctx.context_block.strip():
-            msgs.append(_render_runtime_context(ctx.context_block))
         msgs.append(render_current_turn(ctx.current_turn, ctx.attachments, ctx.hints))
         logger.info("[agent] model input: {} msgs", len(msgs))
         return msgs

@@ -20,7 +20,7 @@ def _context(*, current_turn=None, context_block="", tools=None):
     )
 
 
-def test_build_messages_keeps_system_stable_and_appends_runtime_context_at_tail():
+def test_build_messages_merges_runtime_context_into_single_system_message():
     messages = Agent.build_messages(
         _context(context_block="# Memory\nThe user prefers concise answers.")
     )
@@ -33,14 +33,27 @@ def test_build_messages_keeps_system_stable_and_appends_runtime_context_at_tail(
     assert "Today's date: 2026-07-14" in system
     assert "Time zone: Asia/Shanghai" in system
     assert "12:34:56" not in system
-    assert "# Memory" not in system
+    assert "# Memory\nThe user prefers concise answers." in system
+    assert system.index("# Environment") < system.index("# Memory")
 
-    assert messages[-2].role == "user"
-    assert messages[-2].content.startswith("<system-reminder>\n")
-    assert "# Memory\nThe user prefers concise answers." in messages[-2].content
-    assert messages[-2].content.endswith("\n</system-reminder>")
-    assert messages[-1].role == "user"
-    assert messages[-1].content == "current question"
+    assert [(message.role, message.content) for message in messages[1:]] == [
+        ("user", "earlier question"),
+        ("assistant", "earlier answer"),
+        ("user", "current question"),
+    ]
+    assert all("<system-reminder>" not in str(message.content) for message in messages)
+
+
+def test_build_messages_omits_blank_runtime_context():
+    messages = Agent.build_messages(_context(context_block="  \n"))
+
+    assert [message.role for message in messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert messages[0].content.endswith("Time zone: Asia/Shanghai")
 
 
 def test_build_messages_points_to_datetime_tool_only_when_available():
