@@ -18,7 +18,6 @@ from agent.tools.builtin.install_skill import (
     _dependency_summary,
 )
 from agent.tools.builtin.load_skill import make_load_skill_tool
-from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
 from agent.tools.defaults import build_default_registry
 from agent.message import ToolCall
 from agent.tools.base import ToolBox
@@ -166,6 +165,7 @@ def test_shell_redirects_a_tool_name_typed_as_a_command():
         "git status",
         "./load_skill",
         "python load_skill.py",
+        "read_skill_resource --help",
         "render_notes notes.txt",
         "search_notes ERR_1 notes.txt",
         "list_catalogs",
@@ -1275,59 +1275,6 @@ def test_load_skill_rejects_skill_not_enabled_for_agent(tmp_path):
     assert "skill.architecture-diagram" in out  # lists what IS available
 
 
-def test_read_skill_resource_reads_bundled_file(tmp_path):
-    skill_dir = _make_skill(tmp_path)
-    tool = make_read_skill_resource_tool()
-    token = set_current_tool_scope(_scope_with_skill(skill_dir))
-    try:
-        out = asyncio.run(tool.fn(
-            skill_id="skill.architecture-diagram", path="resources/template.html"
-        ))
-    finally:
-        reset_current_tool_scope(token)
-    assert out == "<html>TEMPLATE</html>"
-
-
-def test_read_skill_resource_blocks_path_traversal(tmp_path):
-    skill_dir = _make_skill(tmp_path)
-    # A secret sibling file outside the skill dir.
-    (tmp_path / "secret.txt").write_text("TOP SECRET", encoding="utf-8")
-    tool = make_read_skill_resource_tool()
-    token = set_current_tool_scope(_scope_with_skill(skill_dir))
-    try:
-        out = asyncio.run(tool.fn(
-            skill_id="skill.architecture-diagram", path="../secret.txt"
-        ))
-    finally:
-        reset_current_tool_scope(token)
-    assert "escapes the skill directory" in out
-    assert "TOP SECRET" not in out
-
-
-def test_read_skill_resource_rejects_skill_not_enabled(tmp_path):
-    skill_dir = _make_skill(tmp_path)
-    tool = make_read_skill_resource_tool()
-    token = set_current_tool_scope(_scope_with_skill(skill_dir))
-    try:
-        out = asyncio.run(tool.fn(skill_id="skill.other", path="resources/template.html"))
-    finally:
-        reset_current_tool_scope(token)
-    assert "not an available skill" in out
-
-
-def test_read_skill_resource_missing_file(tmp_path):
-    skill_dir = _make_skill(tmp_path)
-    tool = make_read_skill_resource_tool()
-    token = set_current_tool_scope(_scope_with_skill(skill_dir))
-    try:
-        out = asyncio.run(tool.fn(
-            skill_id="skill.architecture-diagram", path="resources/nope.txt"
-        ))
-    finally:
-        reset_current_tool_scope(token)
-    assert "is not a file" in out
-
-
 def test_skill_tools_registered_only_when_a_skill_package_exists(tmp_path):
     settings = type("S", (), {"search_provider": "none"})()
     # A configured-but-empty skills root must NOT expose load_skill — with an
@@ -1347,4 +1294,4 @@ def test_skill_tools_registered_only_when_a_skill_package_exists(tmp_path):
     doc = AgentConfigDocument(**{"skills": {"root": str(tmp_path)}})
     reg = build_default_registry(settings, agent_config=doc)
     assert "load_skill" in reg.names()
-    assert "read_skill_resource" in reg.names()
+    assert "read_skill_resource" not in reg.names()

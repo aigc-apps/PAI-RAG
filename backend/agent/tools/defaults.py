@@ -11,7 +11,6 @@ from agent.tools.builtin.publish_artifact import make_publish_artifact_tool
 from agent.tools.builtin.install_skill import make_install_skill_tool
 from agent.tools.builtin.enable_skill import make_enable_skill_for_agent_tool
 from agent.tools.builtin.load_skill import make_load_skill_tool
-from agent.tools.builtin.read_skill_resource import make_read_skill_resource_tool
 from agent.tools.builtin.knowledge import make_knowledge_search_tool
 from agent.tools.builtin.knowledge_read import make_knowledge_read_tool
 from agent.tools.builtin.knowledge_find import make_knowledge_find_tool
@@ -81,10 +80,10 @@ def build_default_registry(
         # time); gate registration on it to keep the tool list clean.
         if getattr(settings, "files_url_secret", ""):
             reg.register(make_publish_artifact_tool(sandbox_provider, settings))
-    # Progressive-disclosure skill loading (read-only, safe): the always-injected
-    # catalog shows only summaries; load_skill pulls a skill's full instructions on
-    # demand and read_skill_resource reads its bundled files (host-side, path-jailed,
-    # no sandbox needed). Gate on at least one skill package actually being
+    # Progressive-disclosure skill loading: the always-injected catalog shows only
+    # summaries and load_skill pulls SKILL.md on demand. Bundled files are accessed
+    # only through the skill's read-only sandbox mount. Gate on at least one package
+    # actually being
     # discovered — a configured-but-empty skills dir must NOT expose load_skill,
     # or the model, seeing the tool with an empty catalog, will hallucinate a
     # skill id (e.g. "skill.frontend-design") and call it. No skills → no tool.
@@ -92,7 +91,6 @@ def build_default_registry(
         skill_sources(getattr(agent_config, "skills", None))
     ):
         reg.register(make_load_skill_tool())
-        reg.register(make_read_skill_resource_tool())
     if _capability_enabled(agent_config, "install_skill"):
         reg.register(make_install_skill_tool(settings, agent_config))
     if _capability_enabled(agent_config, "enable_skill_for_agent"):

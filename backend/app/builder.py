@@ -548,7 +548,7 @@ def _resolve_agent_profile(agent_config, request: ResponsesRequest):
 # build_context: forced into the toolbox iff the agent has active skills, so an
 # include-whitelist or exclude can't strip the tool the catalog tells the model to
 # call. See _select_tool_names(force=...).
-_SKILL_LOADER_TOOLS = ("load_skill", "read_skill_resource")
+_SKILL_LOADER_TOOLS = ("load_skill",)
 
 # read_handle recovers tool results the budget compressor offloaded from the window.
 # It's a system recovery tool: force it past any include-whitelist/exclude so an
@@ -624,10 +624,10 @@ def _enabled_skill_ids(agent_config, agent_profile) -> List[str]:
 def _active_skill_instructions(*, packages: list, enabled_ids: List[str], current_turn: Message) -> str:
     """Level-1 progressive disclosure: always inject the catalog (name +
     description + id) of the agent's enabled skills so it knows which skills it
-    has and when to reach for one. Full instructions (L2) and bundled files (L3)
-    are loaded on demand by the agent via the load_skill / read_skill_resource
-    tools — never preloaded into every turn, and never gated on a lexical query
-    match (which failed cross-language and for trigger-less community skills)."""
+    has and when to reach for one. Full instructions (L2) are loaded on demand by
+    the agent via load_skill; bundled files are accessed through the sandbox mount.
+    Nothing is preloaded into every turn or gated on a lexical query match (which
+    failed cross-language and for trigger-less community skills)."""
     if not packages or not enabled_ids:
         return ""
     return render_skill_catalog(packages=packages, enabled_ids=enabled_ids)

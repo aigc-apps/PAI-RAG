@@ -17,7 +17,7 @@ from agent.tools.builtin._aliyun_notice import maybe_emit_aliyun_notice
 # the tool directly. A real binary with the same name is still runnable by an
 # explicit path (./x, /usr/bin/x), which doesn't start with a bare identifier.
 _TOOL_NOT_SHELL = frozenset({
-    "load_skill", "read_skill_resource",
+    "load_skill",
     "knowledge_search", "knowledge_read", "knowledge_find", "knowledge_list",
     "publish_artifact", "code_interpreter",
     "web_search", "web_fetch", "current_datetime",

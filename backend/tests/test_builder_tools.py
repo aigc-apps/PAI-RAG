@@ -143,13 +143,13 @@ def test_load_skill_registered_when_a_skill_package_exists(tmp_path):
     )
     reg = build_default_registry(_Settings(), agent_config=_agent_config(str(tmp_path)))
     assert "load_skill" in reg.names()
-    assert "read_skill_resource" in reg.names()
+    assert "read_skill_resource" not in reg.names()
 
 
-def test_skill_loaders_survive_include_whitelist_when_skills_active(tmp_path):
+def test_skill_loader_survives_include_whitelist_when_skills_active(tmp_path):
     # Regression: an agent that uses an include-whitelist (only its domain tools)
-    # AND has an enabled skill must still get load_skill / read_skill_resource — the
-    # injected catalog tells the model to call them, so filtering them out strands it
+    # AND has an enabled skill must still get load_skill — the injected catalog tells
+    # the model to call it, so filtering it out strands the Agent
     # ("load_skill 工具在当前会话中不可用"). The two halves of progressive disclosure
     # (catalog + loaders) must stay coupled.
     from app.agent_config import AgentProfile, AgentToolsConfig, AgentSkillsConfig
@@ -185,7 +185,7 @@ def test_skill_loaders_survive_include_whitelist_when_skills_active(tmp_path):
         names = {t.name for t in ctx.tools.tools}
         assert "current_datetime" in names          # the whitelisted domain tool
         assert "load_skill" in names                 # forced in: a skill is active
-        assert "read_skill_resource" in names
+        assert "read_skill_resource" not in names
         assert "web_fetch" not in names              # whitelist still excludes everything else
         assert "Demo Skill" in ctx.context_block     # catalog injected → coupling holds
 
