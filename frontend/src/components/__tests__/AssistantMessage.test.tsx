@@ -35,7 +35,7 @@ describe("AssistantMessage toolCalls", () => {
     })} />);
     expect(screen.getByText("工作中")).toBeInTheDocument();
     expect(screen.getByText("checking sources")).toBeVisible();
-    expect(screen.getAllByText("web_search").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("(web_search)").length).toBeGreaterThan(0);
     expect(screen.getByText("final answer")).toBeInTheDocument();
   });
 });

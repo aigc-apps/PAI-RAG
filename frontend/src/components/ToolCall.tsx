@@ -3,14 +3,15 @@ import * as Collapsible from "@radix-ui/react-collapsible";
 import { AlertTriangle, Check, X, ChevronRight } from "lucide-react";
 import type { ToolUse } from "../types";
 import { cn } from "../lib/cn";
+import { getToolCallDisplay } from "../lib/toolCallDisplay";
 import { useI18n, type MessageKey } from "../i18n";
 
 function StatusDot({ status }: { status: ToolUse["status"] }) {
   if (status === "running")
-    return <span className="h-2 w-2 rounded-full bg-[var(--accent)] pulse-dot" />;
+    return <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--accent)] pulse-dot" />;
   if (status === "done")
-    return <span className="h-2 w-2 rounded-full bg-[var(--success)]" />;
-  return <span className="h-2 w-2 rounded-full bg-[var(--danger)]" />;
+    return <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--success)]" />;
+  return <span className="h-2 w-2 shrink-0 rounded-full bg-[var(--danger)]" />;
 }
 
 function StatusIcon({ status }: { status: ToolUse["status"] }) {
@@ -45,6 +46,7 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
   const { t } = useI18n();
   // Errors auto-expand so the failure is visible without an extra click.
   const [open, setOpen] = useState(tool.status === "error");
+  const display = getToolCallDisplay(tool.name, tool.arguments);
 
   return (
     <Collapsible.Root
@@ -57,14 +59,43 @@ export function ToolCall({ tool }: { tool: ToolUse }) {
           : "border-[var(--border)]"
       )}
     >
-      <Collapsible.Trigger className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)] transition-colors">
+      <Collapsible.Trigger className="group flex w-full min-w-0 items-center gap-2 px-3 py-2 text-sm text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]">
         <StatusDot status={tool.status} />
-        <span className="font-mono text-xs font-medium text-[var(--text)]">{tool.name}</span>
-        <span className={cn("text-xs font-medium ml-1", STATUS_TONE[tool.status])}>
+        {display.labelKey ? (
+          <>
+            <span className="shrink-0 text-xs font-semibold text-[var(--text)]">
+              {t(display.labelKey)}
+            </span>
+            <span className="shrink-0 font-mono text-xs text-[var(--text-muted)]">
+              ({tool.name})
+            </span>
+          </>
+        ) : (
+          <span className="shrink-0 font-mono text-xs font-medium text-[var(--text)]">
+            {tool.name}
+          </span>
+        )}
+        {display.summary && (
+          <>
+            <span
+              aria-hidden="true"
+              className="shrink-0 text-xs text-[var(--text-faint)]"
+            >
+              ·
+            </span>
+            <span
+              className="min-w-0 truncate font-mono text-xs text-[var(--text-faint)]"
+              title={display.summary}
+            >
+              {display.summary}
+            </span>
+          </>
+        )}
+        <span className={cn("shrink-0 text-xs font-medium", STATUS_TONE[tool.status])}>
           {t(STATUS_KEY[tool.status])}
         </span>
         {tool.durationMs != null && tool.status !== "running" && (
-          <span className="text-xs text-[var(--text-faint)]">
+          <span className="shrink-0 text-xs text-[var(--text-faint)]">
             {formatDuration(tool.durationMs)}
           </span>
         )}
