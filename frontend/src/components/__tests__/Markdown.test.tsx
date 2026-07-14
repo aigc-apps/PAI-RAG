@@ -19,4 +19,18 @@ describe("Markdown", () => {
     expect(screen.getByText("Output")).toBeInTheDocument();
     expect(screen.getByText("hello world!")).toBeInTheDocument();
   });
+
+  it("renders source fences as a unified scrollable code surface", () => {
+    const { container } = render(
+      <Markdown content={"```shell\necho $REGION\n```"} />,
+    );
+
+    const code = container.querySelector("code.language-shell");
+    expect(code).toBeInTheDocument();
+    expect(code).toHaveStyle({ background: "transparent" });
+    expect(code?.parentElement).toHaveStyle({ overflowX: "auto" });
+    expect(screen.getByRole("button", { name: "Copy code" })).toHaveClass(
+      "focus-ring",
+    );
+  });
 });

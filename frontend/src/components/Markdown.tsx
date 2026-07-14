@@ -2,12 +2,71 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, Check } from "lucide-react";
 import { copyText } from "../lib/clipboard";
 import { useI18n } from "../i18n";
 
 const plainOutputLanguages = new Set(["text", "txt", "plain", "plaintext", "output", "console"]);
+
+// Prism emits inline token styles, so CSS variables are the most reliable way
+// to make an already-rendered response follow the app theme without coupling it
+// to a second React theme state. The palettes mirror One Light / One Dark while
+// the actual values live with the rest of the application tokens.
+const adaptiveCodeTheme = {
+  'code[class*="language-"]': {
+    color: "var(--code-text)",
+    background: "transparent",
+    fontFamily: '"Fira Code", "SFMono-Regular", Consolas, monospace',
+    textAlign: "left" as const,
+    whiteSpace: "pre" as const,
+    wordSpacing: "normal",
+    wordBreak: "normal" as const,
+    overflowWrap: "normal" as const,
+    tabSize: 2,
+    hyphens: "none" as const,
+  },
+  'pre[class*="language-"]': {
+    color: "var(--code-text)",
+    background: "var(--code-bg)",
+    fontFamily: '"Fira Code", "SFMono-Regular", Consolas, monospace',
+    textAlign: "left" as const,
+    whiteSpace: "pre" as const,
+    wordSpacing: "normal",
+    wordBreak: "normal" as const,
+    overflowWrap: "normal" as const,
+    tabSize: 2,
+    hyphens: "none" as const,
+  },
+  comment: { color: "var(--code-token-comment)", fontStyle: "italic" },
+  prolog: { color: "var(--code-token-comment)" },
+  doctype: { color: "var(--code-token-comment)" },
+  cdata: { color: "var(--code-token-comment)" },
+  punctuation: { color: "var(--code-token-punctuation)" },
+  property: { color: "var(--code-token-red)" },
+  tag: { color: "var(--code-token-red)" },
+  constant: { color: "var(--code-token-red)" },
+  symbol: { color: "var(--code-token-red)" },
+  deleted: { color: "var(--code-token-red)" },
+  boolean: { color: "var(--code-token-yellow)" },
+  number: { color: "var(--code-token-yellow)" },
+  selector: { color: "var(--code-token-green)" },
+  "attr-name": { color: "var(--code-token-green)" },
+  string: { color: "var(--code-token-green)" },
+  char: { color: "var(--code-token-green)" },
+  builtin: { color: "var(--code-token-green)" },
+  inserted: { color: "var(--code-token-green)" },
+  operator: { color: "var(--code-token-purple)" },
+  entity: { color: "var(--code-token-purple)" },
+  url: { color: "var(--code-token-purple)" },
+  variable: { color: "var(--code-token-purple)" },
+  atrule: { color: "var(--code-token-blue)" },
+  "attr-value": { color: "var(--code-token-blue)" },
+  function: { color: "var(--code-token-blue)" },
+  "class-name": { color: "var(--code-token-blue)" },
+  keyword: { color: "var(--code-token-pink)" },
+  regex: { color: "var(--code-token-orange)" },
+  important: { color: "var(--code-token-orange)", fontWeight: 600 },
+};
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const { t } = useI18n();
@@ -23,7 +82,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
 
   return (
     <div className="group my-3 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--code-border)] bg-[var(--code-bg)] shadow-[var(--shadow-sm)]">
-      <div className="flex h-9 items-center justify-between border-b border-[var(--code-border)] bg-[var(--code-header)] px-3">
+      <div className="flex h-8 items-center justify-between border-b border-[var(--code-border)] bg-[var(--code-header)] px-3">
         <span className="font-mono text-[11px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
           {label}
         </span>
@@ -31,7 +90,7 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
           type="button"
           aria-label={t("markdown.copyCode")}
           onClick={copy}
-          className="rounded-[var(--radius-sm)] p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          className="focus-ring rounded-[var(--radius-sm)] p-1 text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
@@ -43,8 +102,17 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
       ) : (
         <SyntaxHighlighter
           language={language}
-          style={oneDark}
+          style={adaptiveCodeTheme}
           PreTag="div"
+          codeTagProps={{
+            className: `language-${language}`,
+            style: {
+              background: "transparent",
+              display: "block",
+              minWidth: "max-content",
+            },
+          }}
+          wrapLongLines={false}
           customStyle={{
             margin: 0,
             background: "var(--code-bg)",
@@ -52,6 +120,8 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
             fontSize: "13px",
             padding: "14px 16px",
             lineHeight: 1.65,
+            overflowX: "auto",
+            maxHeight: "420px",
           }}
         >
           {code}
