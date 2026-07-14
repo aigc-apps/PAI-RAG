@@ -327,6 +327,126 @@ def test_rerank_caps_document_chunks_and_receives_kb_title_and_heading():
     )
 
 
+def test_rerank_diversifies_before_applying_candidate_pool():
+    async def scenario():
+        router = _chat_router()
+        reranker = FakeReranker()
+        router.register_llm("dashscope/rr", reranker)
+        engine = RecordingSearchEngine({})
+        svc = await _svc(router)
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        engine.hits_by_kb[kb.id] = [
+            _hit(
+                kb_id=kb.id,
+                document_id="long",
+                chunk_id=f"long-{index}",
+                title="Long",
+                text=f"long {index}",
+                score=1 - index / 100,
+            )
+            for index in range(6)
+        ] + [
+            _hit(
+                kb_id=kb.id,
+                document_id=f"other-{index}",
+                chunk_id=f"other-{index}",
+                title=f"Other {index}",
+                text=f"other {index}",
+                score=0.8 - index / 100,
+            )
+            for index in range(4)
+        ]
+        await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query="q",
+            top_k=2,
+            rerank_config={
+                "enabled": True,
+                "model": "dashscope/rr",
+                "candidate_pool_size": 5,
+            },
+        )
+        return reranker.calls[-1][1]
+
+    documents = asyncio.run(scenario())
+    assert len(documents) == 5
+    assert sum("Document: Long" in document for document in documents) == 3
+    assert any("Document: Other" in document for document in documents)
+
+
+def test_candidate_pool_is_at_least_page_window():
+    async def scenario():
+        router = _chat_router()
+        reranker = FakeReranker()
+        router.register_llm("dashscope/rr", reranker)
+        engine = RecordingSearchEngine({})
+        svc = await _svc(router)
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        engine.hits_by_kb[kb.id] = [
+            _hit(
+                kb_id=kb.id,
+                document_id=f"doc-{index}",
+                chunk_id=f"chunk-{index}",
+                title=f"Doc {index}",
+                text=f"body {index}",
+                score=1 - index / 100,
+            )
+            for index in range(10)
+        ]
+        await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query="q",
+            top_k=3,
+            offset=4,
+            rerank_config={
+                "enabled": True,
+                "model": "dashscope/rr",
+                "candidate_pool_size": 2,
+            },
+        )
+        return reranker.calls[-1]
+
+    _query, documents, top_n = asyncio.run(scenario())
+    assert len(documents) == 7
+    assert top_n == 7
+
+
+def test_rerank_disabled_does_not_apply_candidate_pool_or_document_cap():
+    async def scenario():
+        engine = RecordingSearchEngine({})
+        svc = await _svc()
+        svc._search = engine
+        svc._fallback_to_local = False
+        kb = await svc.create_kb(user=ADMIN, name="KB", visibility="public")
+        engine.hits_by_kb[kb.id] = [
+            _hit(
+                kb_id=kb.id,
+                document_id="same",
+                chunk_id=f"chunk-{index}",
+                title="Same",
+                text=f"body {index}",
+                score=1 - index / 100,
+            )
+            for index in range(5)
+        ]
+        return await svc.search(
+            user=ADMIN,
+            kb_ids=[kb.id],
+            query="q",
+            top_k=5,
+            rerank_config={"enabled": False, "candidate_pool_size": 1},
+        )
+
+    hits, _total = asyncio.run(scenario())
+    assert [hit.chunk_id for hit in hits] == [f"chunk-{index}" for index in range(5)]
+
+
 def test_query_embedding_fallback_redacts_exception_message(monkeypatch):
     sentinel = "SENSITIVE_EMBED_QUERY_787e"
 

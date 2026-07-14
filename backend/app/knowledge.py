@@ -1019,6 +1019,10 @@ class KnowledgeService:
         offset = max(0, int(offset or 0))
         rerank_cfg = dict(rerank_config or {})
         rerank_on = bool(rerank_cfg.get("enabled")) and self._router is not None
+        configured_candidate_pool = max(
+            1, min(int(rerank_cfg.get("candidate_pool_size") or 50), 200)
+        )
+        effective_candidate_pool = max(configured_candidate_pool, limit + offset)
         # Give every knowledge base an equal opportunity to contribute to the
         # unified ranking. A single cross-index request lets a large KB crowd a
         # small, more relevant KB out of the candidate window.
@@ -1081,6 +1085,7 @@ class KnowledgeService:
         )
         if rerank_on and candidates:
             candidates = self._cap_chunks_per_document(candidates, max_chunks=3)
+            candidates = candidates[:effective_candidate_pool]
             candidates = await self._rerank_hits(
                 query,
                 candidates,

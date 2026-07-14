@@ -241,12 +241,27 @@ def test_es_hybrid_search_dsl_has_knn_and_bm25():
     assert {"term": {"source_type": "text"}} in filt
     assert {"terms": {"tags": ["pai"]}} in filt
     assert body["from"] == 0 and body["size"] == 5
+    assert body["knn"]["k"] == 5
+    assert body["knn"]["num_candidates"] == 50
     # result mapping + total
     assert total == 7
     assert hits[0].chunk_id == "c1"
     assert hits[0].title == "安装指南"
     assert hits[0].metadata["heading"] == "FAQ > license_check"
     assert hits[0].score == 3.2
+
+    asyncio.run(
+        eng.search(
+            kb_ids=["kb_test"],
+            query="如何安装",
+            mode="hybrid",
+            offset=0,
+            limit=20,
+        )
+    )
+    larger_body = fake.search_calls[-1]["body"]
+    assert larger_body["knn"]["k"] == 20
+    assert larger_body["knn"]["num_candidates"] == 80
 
 
 def test_es_keyword_mode_omits_knn_and_vector_mode_omits_bm25():
