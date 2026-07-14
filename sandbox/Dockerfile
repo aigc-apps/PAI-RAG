@@ -77,6 +77,14 @@ RUN tmpdir="$(mktemp -d)" \
     && rm -rf "${tmpdir}" /tmp/aliyun-cli.tgz \
     && aliyun version
 
+# ripgrep (rg) for the code-layer browse/grep workload — the code guidance
+# prompt tells the agent to reach for ripgrep first. In Debian bookworm main;
+# clean the apt lists afterwards to keep the layer small.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ripgrep \
+    && rm -rf /var/lib/apt/lists/* \
+    && rg --version
+
 # Runtime env contract. PATH/VIRTUAL_ENV point at the shared skill env
 # (populated by the builder in phase 2); AGENT_*_PATH are the mount markers
 # the agent service also injects via the platform `envs` field at create time.

@@ -22,6 +22,8 @@ for the full contract.
   this is baked in — local disk beats NFS for the browse/grep workload. Build with
   an empty URL to omit it; the service exposes it only when `code_layer_enabled`.
 - Ensures `/home/user` exists and is owned by 1000, sets `HOME=/home/user`.
+- Installs **ripgrep** (`rg`) for the code-layer browse/grep workload the agent
+  is prompted to run against `/opt/code`.
 - Bakes the **Aliyun CLI** (`/usr/local/bin/aliyun`) and the PAI plugins
   (`aliyun-cli-eas`, `aliyun-cli-pairecservice`, `aliyun-cli-pai-dsw`,
   `aliyun-cli-paifeaturestore`) installed as uid 1000 into `~/.aliyun`, so
