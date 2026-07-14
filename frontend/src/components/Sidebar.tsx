@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Settings2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useConversationsStore } from "../store/conversations";
@@ -174,7 +174,20 @@ export function Sidebar({
   return (
     <aside className="flex w-[var(--sidebar-w)] flex-col border-r border-[var(--border)] bg-[var(--surface)]/95 h-full flex-shrink-0 shadow-[1px_0_0_rgba(15,23,42,0.02)]">
       <div className="flex h-[var(--header-h)] flex-shrink-0 items-center gap-2 border-b border-[var(--border)] bg-[var(--bg-elevated)]/70 px-4">
-        <BrandMark />
+        <div className="min-w-0 flex-1">
+          <BrandMark />
+        </div>
+        {onOpenSettings && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label={t("userMenu.settings")}
+            title={t("userMenu.settings")}
+            className="focus-ring grid h-8 w-8 flex-shrink-0 place-items-center rounded-[var(--radius)] text-[var(--text-muted)] transition-colors hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+          >
+            <Settings2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className="px-3 pt-4">

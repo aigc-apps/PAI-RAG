@@ -25,10 +25,10 @@ const streamingAssistant = (): ChatMessage => ({
   status: "streaming", responseId: "resp_1", toolCalls: [],
 });
 
-function renderSidebar(path = "/") {
+function renderSidebar(path = "/", onOpenSettings?: () => void) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Sidebar />
+      <Sidebar onOpenSettings={onOpenSettings} />
       <div data-testid="location">{<Location />}</div>
     </MemoryRouter>,
   );
@@ -50,6 +50,22 @@ beforeEach(() => {
 });
 
 describe("Sidebar", () => {
+  it("hides the header Settings shortcut without an admin callback", () => {
+    renderSidebar();
+    expect(screen.queryByRole("button", { name: "设置" })).not.toBeInTheDocument();
+  });
+
+  it("opens Settings from the header shortcut when enabled", async () => {
+    const user = userEvent.setup();
+    const onOpenSettings = vi.fn();
+    renderSidebar("/", onOpenSettings);
+
+    const shortcut = screen.getByRole("button", { name: "设置" });
+    expect(shortcut).toHaveAttribute("title", "设置");
+    await user.click(shortcut);
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
   it("shows a row for a brand-new draft immediately", () => {
     // reset() installs one fresh empty draft as the active runtime.
     renderSidebar();
