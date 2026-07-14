@@ -291,24 +291,21 @@ trigger keywords — those skills were effectively invisible to the agent).
   *aware* of its skills. The catalog text instructs the model to call
   `load_skill` before acting. Cost is ~1 line per skill.
 - **L2 — full instructions (on demand).** The `load_skill(skill_id)` tool returns
-  the skill's complete `SKILL.md` body plus a manifest of its bundled files. The
-  model decides when to load, based on the L1 catalog — far more reliable than
-  the host guessing by substring. Loaded text lives in the tool-result history,
-  so it is naturally sticky across the turn's tool loop without being re-injected
-  every turn.
-- **L3 — bundled resources (on demand).** The `read_skill_resource(skill_id,
-  path)` tool reads one bundled file (template, reference, script) from the skill
-  directory. It is **host-side and path-jailed** to the skill's `source_path`, so
-  it works with no sandbox and no NAS — important because the local `source_path`
-  is never bind-mounted (only NAS-backed mounts with a `serverAddr` bind at
-  `/mnt/skills/<id>`), so a sandbox `cat /mnt/skills/...` only works on a NAS
-  deployment while `read_skill_resource` always works.
+  the skill's complete `SKILL.md` body and, when configured, its exact read-only
+  sandbox mount path. It does not enumerate bundled files. The model decides when
+  to load instructions based on the L1 catalog; loaded text remains naturally
+  sticky in the turn's tool-result history.
+- **L3 — bundled resources (on demand, sandbox only).** After loading the skill,
+  the model uses `shell` or `code_interpreter` in the exact `/mnt/skills/<id>`
+  directory reported by `load_skill`. It starts with `ls` or `find`, then reads or
+  runs the required templates, references, and scripts there. The backend exposes
+  no separate resource reader and produces no host-side file manifest.
 
-Both `load_skill` and `read_skill_resource` are read-only and authorize against
-`ToolScope.skill_mounts` — the per-request set of mounts already filtered to the
-skills enabled for this agent. A request for a skill not on that list is refused
-with the list of available ids. They are registered whenever a skill source is
-configured (`skill_sources(agent_config.skills)` is non-empty).
+`load_skill` authorizes against `ToolScope.skill_mounts`, the per-request set of
+mounts already filtered to skills enabled for the current Agent. Sandbox mounts
+use that same Agent-scoped set. Pure instruction skills can work without a
+sandbox; skills that require bundled resources have no host-side fallback when
+sandbox access is unavailable.
 
 ## User Roles
 

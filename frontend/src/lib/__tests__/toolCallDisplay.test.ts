@@ -45,12 +45,6 @@ describe("getToolCallDisplay", () => {
       "skill.pdf",
     ],
     [
-      "read_skill_resource",
-      { skill_id: "skill.pdf", path: "references/a.md" },
-      "tool.name.readSkillResource",
-      "skill.pdf · references/a.md",
-    ],
-    [
       "install_skill",
       {
         source: {
@@ -115,6 +109,15 @@ describe("getToolCallDisplay", () => {
   it("preserves unknown tools through an empty policy result", () => {
     expect(
       getToolCallDisplay("custom_tool", '{"query":"secret"}'),
+    ).toEqual({});
+  });
+
+  it("treats the removed skill resource reader as an unknown tool", () => {
+    expect(
+      getToolCallDisplay(
+        "read_skill_resource",
+        '{"skill_id":"skill.pdf","path":"references/a.md"}',
+      ),
     ).toEqual({});
   });
 });

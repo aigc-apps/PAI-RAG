@@ -377,7 +377,6 @@ export const en = {
   "tool.name.currentDatetime": "Get current time",
   "tool.name.loadSkill": "Load skill",
   "tool.name.enableSkillForAgent": "Configure agent skill",
-  "tool.name.readSkillResource": "Read skill resource",
   "tool.name.installSkill": "Install skill",
   "tool.name.publishArtifact": "Publish artifact",
   "tool.name.spawnSubagent": "Start subagent",

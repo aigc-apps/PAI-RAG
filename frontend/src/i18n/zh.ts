@@ -377,7 +377,6 @@ export const zh: Record<keyof typeof en, string> = {
   "tool.name.currentDatetime": "获取当前时间",
   "tool.name.loadSkill": "加载技能",
   "tool.name.enableSkillForAgent": "配置 Agent 技能",
-  "tool.name.readSkillResource": "读取技能资源",
   "tool.name.installSkill": "安装技能",
   "tool.name.publishArtifact": "发布文件",
   "tool.name.spawnSubagent": "启动子 Agent",

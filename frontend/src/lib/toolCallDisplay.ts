@@ -81,11 +81,6 @@ const CONFIG: Record<string, ToolDisplayConfig> = {
     labelKey: "tool.name.enableSkillForAgent",
     summary: (args) => stringValue(args.skill_id),
   },
-  read_skill_resource: {
-    labelKey: "tool.name.readSkillResource",
-    summary: (args) =>
-      joinValues(stringValue(args.skill_id), stringValue(args.path)),
-  },
   install_skill: {
     labelKey: "tool.name.installSkill",
     summary: (args) => {
