@@ -1,11 +1,14 @@
 import asyncio
 import base64
+import datetime
 import shlex
+import time
 
 import pytest
 
 from agent.tools.sandbox_providers import (
     AgentRunRestSandboxProvider,
+    _SandboxSession,
     _template_env_refs,
     make_sandbox_provider,
 )
@@ -202,6 +205,63 @@ def test_create_sandbox_async_pairec_template_never_carries_gitlab_token(monkeyp
     bootstrap_source = _bootstrap_source(bootstrap_calls[0]["json"]["command"])
     assert "GITLAB_TOKEN" not in bootstrap_source
     assert "glpat-should-not-leak" not in bootstrap_source
+
+
+def test_maybe_refresh_env_async_carries_template_env_refs(monkeypatch):
+    """Regression: the STS-refresh path re-bootstraps the env contract
+    independently of `_create_sandbox_async`, and `_bootstrap_env_async`'s
+    injected script REPLACES (not appends to) the marker block in
+    ~/.bash_env. If the refreshed contract omits `env_refs`, the refresh
+    silently deletes whatever `_create_sandbox_async` originally injected --
+    e.g. GITLAB_TOKEN vanishes the moment a long-running conversation's STS
+    creds cross the refresh margin, and the agent's next `git fetch` gets a
+    401 with nothing in the logs explaining it. This drives
+    `_maybe_refresh_env_async` directly (not `_create_sandbox_async`) so it
+    pins the *refresh* hand-off, not the create hand-off already covered
+    above.
+    """
+    monkeypatch.setenv("GITLAB_TOKEN", "glpat-refresh-secret")
+    provider = _provider()
+    captured: list[dict] = []
+
+    async def fake_bootstrap(sandbox_id, env_contract):
+        captured.append(env_contract or {})
+
+    monkeypatch.setattr(provider, "_bootstrap_env_async", fake_bootstrap)
+
+    # Session already inside the refresh margin (_ENV_REFRESH_MARGIN_SECONDS
+    # = 300s), so _maybe_refresh_env_async actually fires the re-inject.
+    session = _SandboxSession(
+        handle="sb-refresh-1",
+        last_used=0.0,
+        last_checked=0.0,
+        env_expires_at=time.time() + 10,
+    )
+
+    expiry = (
+        datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    token = set_current_tool_scope(
+        ToolScope(
+            agent_id="a1",
+            metadata={
+                "sandbox_template": "turbox",
+                "aliyun_sandbox_env": {
+                    "ALIBABACLOUD_ACCESS_KEY_ID": "ak",
+                    "ALIBABACLOUD_ACCESS_KEY_SECRET": "sk",
+                    "ALIBABACLOUD_SECURITY_TOKEN": "tok",
+                    "ALIBABACLOUD_SESSION_EXPIRATION": expiry,
+                },
+            },
+        )
+    )
+    try:
+        asyncio.run(provider._maybe_refresh_env_async(session, "scope-refresh-1"))
+    finally:
+        reset_current_tool_scope(token)
+
+    assert len(captured) == 1
+    assert captured[0].get("GITLAB_TOKEN") == "glpat-refresh-secret"
 
 
 def _doc_with(settings: dict) -> AgentConfigDocument:

@@ -393,10 +393,20 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
         # token (the builder re-assumes each turn). new_expiry is None when the
         # scope still has no expiring creds (user hasn't authorized yet) — leave the
         # sandbox as-is rather than run a pointless bootstrap.
-        env_contract = _build_env_contract(self, get_current_tool_scope(), scope_key)
+        env_contract = _build_env_contract(self, get_current_tool_scope(), scope_key) or {}
         new_expiry = _env_contract_expiry(env_contract)
         if new_expiry is None:
             return
+        # ~/.bash_env delivery is a SHARED path: _ENV_BOOTSTRAP_PY replaces the
+        # whole marker block rather than appending to it (see its comment), so
+        # any caller that re-injects must carry the FULL contract or it silently
+        # drops whatever it omits. _create_sandbox_async merges the bound
+        # template's env_refs in before its first bootstrap call; do the same
+        # here, or a warm sandbox loses e.g. GITLAB_TOKEN the moment this refresh
+        # fires — the next `git fetch` 401s with nothing in the logs explaining
+        # why. Resolve the template the same way create does.
+        _, tpl = self._resolve_template()
+        env_contract.update(_template_env_refs(tpl))
         # Covers both cases: creds nearing expiry are replaced, and a sandbox that
         # started credential-less gets its first injection once the user authorizes
         # mid-session (so the very next turn's aliyun calls just work).
