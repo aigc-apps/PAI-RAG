@@ -27,6 +27,16 @@ def test_default_document_ships_no_template_name():
     assert provider.settings["default_template"] == ""
 
 
+def _settings():
+    return type("Settings", (), {
+        "openai_api_key": "",
+        "default_model": "m",
+        "search_provider": "none",
+        "search_api_key": "",
+        "search_endpoint": "",
+    })()
+
+
 def _doc_with(settings: dict) -> AgentConfigDocument:
     return AgentConfigDocument(**{
         "providers": [{
@@ -53,13 +63,13 @@ def test_runtime_status_healthy_with_templates():
         "api_key": "secret",
         "account_id": "acct-1",
     })
-    doc = apply_runtime_status(doc)
+    doc = apply_runtime_status(doc, _settings(), None)
     provider = next(p for p in doc.providers if p.id == "sandbox.default")
     assert provider.status == "healthy"
 
 
 def test_runtime_status_missing_config_with_empty_templates():
     doc = _doc_with({"templates": {}, "api_key": "secret", "account_id": "acct-1"})
-    doc = apply_runtime_status(doc)
+    doc = apply_runtime_status(doc, _settings(), None)
     provider = next(p for p in doc.providers if p.id == "sandbox.default")
     assert provider.status == "missing_config"

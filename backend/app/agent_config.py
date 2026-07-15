@@ -589,7 +589,7 @@ def mask_secrets(doc: AgentConfigDocument) -> AgentConfigDocument:
     return out
 
 
-def apply_runtime_status(doc: AgentConfigDocument, settings=None, router=None) -> AgentConfigDocument:
+def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentConfigDocument:
     out = doc.model_copy(deep=True)
     _merge_discovered_skills(out)
     providers = {p.id: p for p in out.providers}
