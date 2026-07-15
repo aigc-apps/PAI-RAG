@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { ChatMessage, ConversationDetail, FileArtifact, ToolNotice } from "../types";
+import type {
+  AssistantStep,
+  ChatMessage,
+  ConversationDetail,
+  FileArtifact,
+  ToolNotice,
+} from "../types";
 
 interface WireHistoryMessage {
   role: "user" | "assistant";
@@ -8,6 +14,7 @@ interface WireHistoryMessage {
   response_id: string;
   previous_response_id?: string | null;
   status?: ChatMessage["status"];
+  steps?: AssistantStep[] | null;
   tool_calls?: Array<{
     call_id: string;
     name: string;
@@ -44,6 +51,7 @@ export function normalizeHistoryMessages(
         files: tc.files && tc.files.length ? tc.files : undefined,
         notice: tc.notice ?? undefined,
       })),
+      steps: Array.isArray(r.steps) && r.steps.length ? r.steps : undefined,
       usage: r.usage
         ? {
             input: r.usage.input_tokens ?? 0,

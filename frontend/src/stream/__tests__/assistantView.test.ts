@@ -24,6 +24,29 @@ const tool = (id: string): ToolUse => ({
 });
 
 describe("deriveAssistantView", () => {
+  it("keeps reasoning and tools interleaved before the final text", () => {
+    const v = deriveAssistantView(
+      msg({
+        text: "final answer",
+        reasoning: "first thoughtsecond thought",
+        toolCalls: [tool("c1")],
+        steps: [
+          { kind: "reasoning", text: "first thought" },
+          { kind: "tool", id: "c1" },
+          { kind: "reasoning", text: "second thought" },
+          { kind: "text", text: "final answer" },
+        ],
+      })
+    );
+
+    expect(v.bodyText).toBe("final answer");
+    expect(v.activitySteps).toEqual([
+      { kind: "reasoning", text: "first thought" },
+      { kind: "tool", tool: tool("c1") },
+      { kind: "reasoning", text: "second thought" },
+    ]);
+  });
+
   it("splits the final text run into the body and routes narration+tools to activity", () => {
     const v = deriveAssistantView(
       msg({

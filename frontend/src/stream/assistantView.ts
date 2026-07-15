@@ -2,6 +2,7 @@ import type { ChatMessage, ToolUse } from "../types";
 
 /** A timeline step with its tool reference already resolved to the live object. */
 export type ResolvedStep =
+  | { kind: "reasoning"; text: string }
   | { kind: "text"; text: string }
   | { kind: "tool"; tool: ToolUse };
 
@@ -41,10 +42,10 @@ export function deriveAssistantView(message: ChatMessage): AssistantView {
 
   const activitySteps: ResolvedStep[] = [];
   for (const step of activityRaw) {
-    if (step.kind === "text") {
+    if (step.kind === "text" || step.kind === "reasoning") {
       // Drop whitespace-only narration runs (e.g. the trailing "\n\n" a model
       // emits before a tool call) so they don't render as empty paragraphs.
-      if (step.text.trim()) activitySteps.push({ kind: "text", text: step.text });
+      if (step.text.trim()) activitySteps.push({ kind: step.kind, text: step.text });
     } else {
       const tool = toolById.get(step.id);
       if (tool) activitySteps.push({ kind: "tool", tool });

@@ -20,7 +20,8 @@ export function AgentActivity({
   messageStatus: "streaming" | "completed" | "failed" | "stopped" | "cancelled";
 }) {
   const { t } = useI18n();
-  const hasReasoning = Boolean(reasoning);
+  const hasTimelineReasoning = steps.some((step) => step.kind === "reasoning");
+  const hasReasoning = Boolean(reasoning) || hasTimelineReasoning;
   const tools = steps.flatMap((s) => (s.kind === "tool" ? [s.tool] : []));
   const hasTools = tools.length > 0;
   const hasSteps = steps.length > 0;
@@ -87,7 +88,7 @@ export function AgentActivity({
         )}
       </Collapsible.Trigger>
       <Collapsible.Content className="ml-[9px] mt-1 border-l border-[var(--border)] pl-4">
-        {hasReasoning && (
+        {reasoning && !hasTimelineReasoning && (
           <div className="mb-2 whitespace-pre-wrap text-xs leading-6 text-[var(--text-muted)]">
             {reasoning.trimEnd()}
           </div>
@@ -100,7 +101,7 @@ export function AgentActivity({
             <ToolCall key={step.tool.id} tool={step.tool} />
           ) : (
             <div
-              key={`text-${i}`}
+              key={`${step.kind}-${i}`}
               className="mb-2 whitespace-pre-wrap text-xs leading-6 text-[var(--text-muted)]"
             >
               {step.text.trimEnd()}

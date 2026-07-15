@@ -107,6 +107,21 @@ describe("chat store", () => {
 });
 
 describe("normalizeHistoryMessages", () => {
+  it("preserves persisted assistant execution steps", () => {
+    const steps = [
+      { kind: "reasoning", text: "first thought" },
+      { kind: "tool", id: "c1" },
+      { kind: "text", text: "answer" },
+    ];
+    const out = normalizeHistoryMessages({
+      id: "c", title: null, created_at: null, updated_at: null, latest_response_id: "r1",
+      messages: [{ role: "assistant", text: "answer", reasoning: "first thought", response_id: "r1",
+        status: "completed", steps, tool_calls: [] } as never],
+    });
+
+    expect(out[0].steps).toEqual(steps);
+  });
+
   it("normalizeHistoryMessages maps tool_calls", () => {
     const out = normalizeHistoryMessages({
       id: "c", title: null, created_at: null, updated_at: null, latest_response_id: "r1",
