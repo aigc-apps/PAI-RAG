@@ -231,8 +231,10 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
         "providers": [
             {
                 "name": "openai",
-                "base_url": "https://api.openai.com/v1",
-                "api_key_env": "OPENAI_API_KEY",
+                "type": "openai_compatible",
+                "use_default_env": True,
+                "base_url": "",
+                "api_key": "",
                 "models": [
                     {
                         "id": "gpt-4o-mini",
@@ -444,6 +446,16 @@ def _merge_default(raw: Dict[str, Any]) -> AgentConfigDocument:
         merged["default_agent"] = raw["default_agent"]
     if isinstance(raw.get("models"), dict):
         merged["models"] = raw["models"]
+        default_provider = str(merged["models"].get("default_model") or "").partition("/")[0]
+        for provider in merged["models"].get("providers", []) or []:
+            if (
+                isinstance(provider, dict)
+                and provider.get("name") == default_provider
+                and provider.get("api_key_env") == "OPENAI_API_KEY"
+                and "use_default_env" not in provider
+            ):
+                provider["type"] = "openai_compatible"
+                provider["use_default_env"] = True
     if isinstance(raw.get("skills"), dict):
         merged["skills"].update(raw["skills"])
     kb_raw = raw.get("knowledgebase")

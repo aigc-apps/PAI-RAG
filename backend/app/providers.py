@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from app.llm import LeanLLM
 
 ModelType = Literal["chat", "embedding", "rerank"]
+ProviderType = Literal["openai_compatible"]
 # Wire protocol for embedding/rerank clients. `openai` is the compatible shape
 # (POST {base_url}/embeddings | /rerank) used by everyone else; `dashscope` is
 # Alibaba's native services protocol (a full per-model endpoint + nested body).
@@ -22,6 +23,10 @@ _DASHSCOPE_NATIVE_DEFAULTS = {
     "embedding": "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding",
     "rerank": "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
 }
+
+
+def _non_blank_env(name: str) -> str:
+    return os.environ.get(name, "").strip()
 
 
 class ModelSpec(BaseModel):
@@ -60,12 +65,21 @@ class ProviderConfig(BaseModel):
     get_llm`)."""
 
     name: str
-    base_url: str
+    type: ProviderType = "openai_compatible"
+    use_default_env: bool = False
+    base_url: str = ""
     api_key_env: Optional[str] = None
     api_key: Optional[str] = None  # direct (fallback/tests); precedence over env
     models: List[ModelSpec]
 
+    def resolve_base_url(self) -> str:
+        if self.use_default_env:
+            return _non_blank_env("OPENAI_BASE_URL") or self.base_url.strip()
+        return self.base_url.strip()
+
     def resolve_key(self) -> str:
+        if self.use_default_env:
+            return _non_blank_env("OPENAI_API_KEY") or (self.api_key or "").strip()
         if self.api_key is not None:
             return self.api_key
         if self.api_key_env:
@@ -81,6 +95,8 @@ class ModelConfig(BaseModel):
 
     id: str
     provider: str
+    provider_type: ProviderType = "openai_compatible"
+    use_default_env: bool = False
     type: ModelType = "chat"
     protocol: ModelProtocol = "openai"
     base_url: str
@@ -97,7 +113,14 @@ class ModelConfig(BaseModel):
     def qualified_id(self) -> str:
         return f"{self.provider}/{self.id}"
 
+    def resolve_base_url(self) -> str:
+        if self.use_default_env:
+            return _non_blank_env("OPENAI_BASE_URL") or self.base_url.strip()
+        return self.base_url.strip()
+
     def resolve_key(self) -> str:
+        if self.use_default_env:
+            return _non_blank_env("OPENAI_API_KEY") or (self.api_key or "").strip()
         if self.api_key is not None:
             return self.api_key
         if self.api_key_env:
@@ -117,6 +140,8 @@ class ModelConfig(BaseModel):
         return cls(
             id=m.id,
             provider=p.name,
+            provider_type=p.type,
+            use_default_env=p.use_default_env and not base_url,
             type=m.type,
             protocol=m.protocol,
             base_url=base_url or p.base_url,
@@ -281,6 +306,10 @@ class ProviderRouter:
         providers get the "EMPTY" sentinel (AsyncOpenAI / httpx need non-empty)."""
         key = cfg.resolve_key()
         if not key:
+            if cfg.use_default_env:
+                raise RuntimeError(
+                    "Default model provider requires OPENAI_API_KEY or a manual API key."
+                )
             if cfg.api_key_env:
                 raise RuntimeError(
                     f"provider '{cfg.provider}' requires env var "
@@ -288,6 +317,18 @@ class ProviderRouter:
                 )
             key = "EMPTY"
         return key
+
+    def _resolve_base_url(self, cfg: ModelConfig) -> str:
+        base_url = cfg.resolve_base_url()
+        if not base_url:
+            if cfg.use_default_env:
+                raise RuntimeError(
+                    "Default model provider requires OPENAI_BASE_URL or a manual base URL."
+                )
+            raise RuntimeError(
+                f"provider '{cfg.provider}' requires a base URL (model '{cfg.id}')"
+            )
+        return base_url
 
     def get_llm(self, model_id: str):
         if model_id in self._clients:
@@ -297,9 +338,10 @@ class ProviderRouter:
             raise ValueError(
                 f"model '{model_id}' is a {cfg.type} model, not a chat model"
             )
+        base_url = self._resolve_base_url(cfg)
         key = self._resolve_key(cfg)
         llm = LeanLLM(
-            base_url=cfg.base_url,
+            base_url=base_url,
             api_key=key,
             model=cfg.id,
             max_tokens=cfg.max_output_tokens,
@@ -322,16 +364,17 @@ class ProviderRouter:
             )
         from app.retrieval_models import DashScopeEmbedder, OpenAICompatibleEmbedder
 
+        base_url = self._resolve_base_url(cfg)
         key = self._resolve_key(cfg)
         if cfg.protocol == "dashscope":
             emb = DashScopeEmbedder(
-                base_url=cfg.base_url, api_key=key, model=cfg.id,
+                base_url=base_url, api_key=key, model=cfg.id,
                 dimension=cfg.dimension or 1024,
                 concurrency_gate=self._embedding_gate,
             )
         else:
             emb = OpenAICompatibleEmbedder(
-                base_url=cfg.base_url, api_key=key, model=cfg.id,
+                base_url=base_url, api_key=key, model=cfg.id,
                 dimension=cfg.dimension,
             )
         self._clients[model_id] = emb
@@ -348,11 +391,12 @@ class ProviderRouter:
             )
         from app.retrieval_models import DashScopeReranker, OpenAICompatibleReranker
 
+        base_url = self._resolve_base_url(cfg)
         key = self._resolve_key(cfg)
         if cfg.protocol == "dashscope":
-            rr = DashScopeReranker(base_url=cfg.base_url, api_key=key, model=cfg.id)
+            rr = DashScopeReranker(base_url=base_url, api_key=key, model=cfg.id)
         else:
-            rr = OpenAICompatibleReranker(base_url=cfg.base_url, api_key=key, model=cfg.id)
+            rr = OpenAICompatibleReranker(base_url=base_url, api_key=key, model=cfg.id)
         self._clients[model_id] = rr
         return rr
 

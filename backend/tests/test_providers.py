@@ -68,6 +68,100 @@ def test_key_resolution_direct_then_env(monkeypatch):
     assert r.get_llm("x/a").client.api_key == "from-env"
 
 
+def test_default_provider_prefers_openai_environment(monkeypatch):
+    monkeypatch.setenv("OPENAI_BASE_URL", " https://env.example/v1 ")
+    monkeypatch.setenv("OPENAI_API_KEY", " env-key ")
+    provider = ProviderConfig(
+        name="openai",
+        type="openai_compatible",
+        use_default_env=True,
+        base_url="https://manual.example/v1",
+        api_key="manual-key",
+        models=[ModelSpec(id="chat")],
+    )
+
+    config = ModelConfig.from_provider(provider, provider.models[0])
+
+    assert config.resolve_base_url() == "https://env.example/v1"
+    assert config.resolve_key() == "env-key"
+    router = ProviderRouter(ModelCatalog(default_model="openai/chat", providers=[provider]))
+    llm = router.get_llm("openai/chat")
+    assert str(llm.client.base_url).startswith("https://env.example/v1")
+    assert llm.client.api_key == "env-key"
+
+
+def test_default_provider_falls_back_independently(monkeypatch):
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+    provider = ProviderConfig(
+        name="openai",
+        type="openai_compatible",
+        use_default_env=True,
+        base_url="https://manual.example/v1",
+        api_key="manual-key",
+        models=[ModelSpec(id="chat")],
+    )
+
+    config = ModelConfig.from_provider(provider, provider.models[0])
+
+    assert config.resolve_base_url() == "https://manual.example/v1"
+    assert config.resolve_key() == "env-key"
+
+
+def test_default_provider_treats_blank_environment_as_absent(monkeypatch):
+    monkeypatch.setenv("OPENAI_BASE_URL", "   ")
+    monkeypatch.setenv("OPENAI_API_KEY", "\t")
+    provider = ProviderConfig(
+        name="openai",
+        type="openai_compatible",
+        use_default_env=True,
+        base_url=" https://manual.example/v1 ",
+        api_key=" manual-key ",
+        models=[ModelSpec(id="chat")],
+    )
+
+    config = ModelConfig.from_provider(provider, provider.models[0])
+
+    assert config.resolve_base_url() == "https://manual.example/v1"
+    assert config.resolve_key() == "manual-key"
+
+
+def test_custom_provider_ignores_default_openai_environment(monkeypatch):
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://env.example/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "env-key")
+    provider = ProviderConfig(
+        name="custom",
+        base_url="https://custom.example/v1",
+        api_key="custom-key",
+        models=[ModelSpec(id="chat")],
+    )
+
+    config = ModelConfig.from_provider(provider, provider.models[0])
+
+    assert config.resolve_base_url() == "https://custom.example/v1"
+    assert config.resolve_key() == "custom-key"
+
+
+def test_default_provider_reports_missing_url_and_key(monkeypatch):
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    provider = ProviderConfig(
+        name="openai",
+        type="openai_compatible",
+        use_default_env=True,
+        models=[ModelSpec(id="chat")],
+    )
+    router = ProviderRouter(ModelCatalog(default_model="openai/chat", providers=[provider]))
+
+    with pytest.raises(RuntimeError, match="OPENAI_BASE_URL or a manual base URL"):
+        router.get_llm("openai/chat")
+
+    provider.base_url = "https://manual.example/v1"
+    router = ProviderRouter(ModelCatalog(default_model="openai/chat", providers=[provider]))
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY or a manual API key"):
+        router.get_llm("openai/chat")
+
+
 def test_provider_with_missing_key_is_kept_and_validated_on_use(monkeypatch):
     # Keys are not checked at load: a provider with an unset api_key_env stays
     # in the catalog (so the user can switch to it after setting the env var,
@@ -201,7 +295,9 @@ def test_load_catalog_fallback_uses_default_unified_config():
     assert cat.default_model == "openai/gpt-4o-mini"
     p0 = cat.providers[0]
     assert p0.name == "openai"
-    assert p0.base_url == "https://api.openai.com/v1"
+    assert p0.type == "openai_compatible"
+    assert p0.use_default_env is True
+    assert p0.base_url == ""
     assert p0.models[0].id == "gpt-4o-mini"
 
 
