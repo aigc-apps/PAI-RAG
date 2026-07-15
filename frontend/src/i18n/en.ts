@@ -744,6 +744,7 @@ export const en = {
   "settings.sandbox.templateWritableHelp": "Set this when the image's /opt/code is owned by the runtime user (git working copies the agent can check out). Must match the image.",
   "settings.sandbox.templateEnvRefs": "Env refs (VAR=SOURCE_ENV_VAR)",
   "settings.sandbox.defaultTemplate": "Default template",
+  "settings.sandbox.duplicateTemplateKey": "Sandbox template keys must be unique",
   "settings.agent.sandboxTemplate": "Sandbox template",
   "settings.agent.sandboxTemplateDefault": "Use default",
 } satisfies Record<string, string>;

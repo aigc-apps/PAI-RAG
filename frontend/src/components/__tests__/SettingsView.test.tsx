@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SettingsView } from "../SettingsView";
 import { useAgentConfigStore } from "../../store/agentConfig";
@@ -287,7 +287,7 @@ describe("SettingsView", () => {
     expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
   });
 
-  it("keeps both entries when a rename collides with an existing key", async () => {
+  it("blocks save when a rename collides with an existing key", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
     useAgentConfigStore.setState({ save });
@@ -303,21 +303,49 @@ describe("SettingsView", () => {
     const nameInputs = screen.getAllByLabelText("Sandbox template name");
     await user.type(nameInputs[1], "second-template");
 
-    // Attempt to rename the second row ("template-2", since "default" already
-    // occupies slot 1) to the first row's key ("default"). renameTemplate must
-    // refuse the collision, not overwrite it.
+    // Rename the second row ("template-2", since "default" already occupies
+    // slot 1) to the first row's key ("default"). Rows are keyed by a stable
+    // id now, so two rows are allowed to transiently share a key while the
+    // user edits — the rename applies rather than being silently refused.
+    // The collision is instead caught at save time.
     const keyInputs = screen.getAllByLabelText("Sandbox template key");
-    fireEvent.change(keyInputs[1], { target: { value: "default" } });
+    await user.clear(keyInputs[1]);
+    await user.type(keyInputs[1], "default");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("沙箱模板 key 不能重复")).toBeInTheDocument();
+  });
+
+  it("keeps focus and the full typed value when renaming a template key by typing", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
+
+    const keyInput = screen.getByLabelText("Sandbox template key");
+    await user.clear(keyInput);
+    // Real per-keystroke typing (not fireEvent.change) — this is what breaks
+    // if the row remounts on every keystroke because the list key is derived
+    // from the editable `key` field instead of a stable row id.
+    await user.type(keyInput, "turbox");
+
+    expect(keyInput).toHaveFocus();
+    expect(keyInput).toHaveValue("turbox");
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save).toHaveBeenCalledOnce();
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     const provider = saved.providers.find((item) => item.id === "sandbox.default");
-    expect(provider?.settings.templates).toEqual({
-      default: { name: "default-template" },
-      "template-2": { name: "second-template" },
-    });
+    expect(provider?.settings.templates).toEqual({ turbox: { name: "code-template" } });
   });
 
   it("preserves an in-progress env_refs value while typing a var name", async () => {
@@ -332,6 +360,100 @@ describe("SettingsView", () => {
     await user.type(screen.getByLabelText("Sandbox template env refs"), "GITLAB_TOKEN=");
 
     expect(screen.getByLabelText("Sandbox template env refs")).toHaveValue("GITLAB_TOKEN=");
+  });
+
+  it("keeps a half-typed env-ref value across a key rename in the same row", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    await user.type(screen.getByLabelText("Sandbox template env refs"), "GITLAB_TOKEN=");
+
+    const keyInput = screen.getByLabelText("Sandbox template key");
+    await user.clear(keyInput);
+    await user.type(keyInput, "turbox");
+
+    // If the row remounted on rename, this local buffer would be wiped and
+    // re-derived from the last committed (empty) env_refs map.
+    expect(screen.getByLabelText("Sandbox template env refs")).toHaveValue("GITLAB_TOKEN=");
+  });
+
+  it("carries default_template to the new key when its row is renamed", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const docWithDefault: AgentConfigDocument = {
+      ...baseDoc,
+      providers: baseDoc.providers.map((p) =>
+        p.id === "sandbox.default"
+          ? {
+              ...p,
+              settings: {
+                ...p.settings,
+                templates: { default: { name: "code-template" } },
+                default_template: "default",
+              },
+            }
+          : p
+      ),
+    };
+
+    render(<SettingsView doc={docWithDefault} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    const keyInput = screen.getByLabelText("Sandbox template key");
+    await user.clear(keyInput);
+    await user.type(keyInput, "turbox");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const provider = saved.providers.find((item) => item.id === "sandbox.default");
+    expect(provider?.settings.templates).toEqual({ turbox: { name: "code-template" } });
+    expect(provider?.settings.default_template).toBe("turbox");
+  });
+
+  it("resets default_template to blank when its row is removed", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const docWithDefault: AgentConfigDocument = {
+      ...baseDoc,
+      providers: baseDoc.providers.map((p) =>
+        p.id === "sandbox.default"
+          ? {
+              ...p,
+              settings: {
+                ...p.settings,
+                templates: { default: { name: "code-template" } },
+                default_template: "default",
+              },
+            }
+          : p
+      ),
+    };
+
+    render(<SettingsView doc={docWithDefault} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // Add a second row so the map isn't empty after removing "default" (an
+    // empty map is blocked by a separate save-gate check).
+    await user.click(screen.getByRole("button", { name: "Add sandbox template" }));
+    const nameInputs = screen.getAllByLabelText("Sandbox template name");
+    await user.type(nameInputs[1], "second-template");
+
+    await user.click(screen.getByRole("button", { name: "Remove template default" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const provider = saved.providers.find((item) => item.id === "sandbox.default");
+    expect(provider?.settings.default_template).toBe("");
   });
 
   it("binds an agent to a sandbox template by key", async () => {

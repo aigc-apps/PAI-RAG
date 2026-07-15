@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CircleAlert,
@@ -2425,6 +2425,14 @@ type SandboxTemplate = {
   env_refs?: Record<string, string>;
 };
 
+// Form-only shape for the templates editor: an array with a stable `id` so
+// React's reconciliation key never changes while the user edits `key` (the
+// object key the row serializes to on save). Using the editable key itself as
+// the list key would remount the row on every keystroke, dropping focus and
+// wiping in-progress input. Never sent to the API — see saveSandbox, which
+// serializes rows back to the `Record<string, SandboxTemplate>` shape.
+type TemplateRow = SandboxTemplate & { id: string; key: string };
+
 // env_refs <-> "VAR=SOURCE_ENV_VAR, VAR2=OTHER" round-trip. Pure — hoisted to
 // module scope so both the dialog and each template row can share it.
 function envRefsToText(refs?: Record<string, string>) {
@@ -2526,53 +2534,84 @@ function SandboxConfigDialog({
   const [apiKeyEnv, setApiKeyEnv] = useState(String(settings.api_key_env ?? "AGENTRUN_SANDBOX_API_KEY"));
   const [accountId, setAccountId] = useState(String(settings.account_id ?? ""));
   const [accountIdEnv, setAccountIdEnv] = useState(String(settings.account_id_env ?? "AGENTRUN_ACCOUNT_ID"));
-  const [templates, setTemplates] = useState<Record<string, SandboxTemplate>>(() => {
+  const nextRowId = useRef(0);
+  const makeRowId = () => `row-${nextRowId.current++}`;
+  const [rows, setRows] = useState<TemplateRow[]>(() => {
     const initial = (settings.templates as Record<string, SandboxTemplate>) ?? {};
+    const entries = Object.entries(initial);
     // Never start the editor with zero rows — an empty list reads as "broken"
     // rather than "not configured yet".
-    return Object.keys(initial).length > 0 ? initial : { default: { name: "" } };
+    const seeded: [string, SandboxTemplate][] =
+      entries.length > 0 ? entries : [["default", { name: "" }]];
+    return seeded.map(([key, tpl]) => ({ id: makeRowId(), key, ...tpl }));
   });
   const [defaultTemplate, setDefaultTemplate] = useState(String(settings.default_template ?? ""));
   const [sessionIdle, setSessionIdle] = useState(String(settings.session_idle_seconds ?? 600));
   const [timeout, setTimeoutValue] = useState(String(settings.timeout_seconds ?? 30));
   const [error, setError] = useState("");
 
-  const setTemplate = (key: string, patch: Partial<SandboxTemplate>) =>
-    setTemplates((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+  const setTemplate = (id: string, patch: Partial<SandboxTemplate>) =>
+    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
 
-  const renameTemplate = (from: string, to: string) =>
-    setTemplates((prev) => {
-      if (!to.trim() || (to !== from && to in prev)) return prev;
-      const next: Record<string, SandboxTemplate> = {};
-      // rebuild in order so the row does not jump while typing
-      for (const [k, v] of Object.entries(prev)) next[k === from ? to : k] = v;
-      return next;
-    });
+  // Renaming is allowed to transiently collide with another row's key, or
+  // even be momentarily blank while the user clears the field to retype —
+  // that is normal mid-edit state, not an error, and refusing to commit it
+  // would fight React's controlled-input value restoration and revert
+  // whatever the user just typed. Both are instead caught by the save gate
+  // below. If `defaultTemplate` was pointing at this row's old key, the
+  // rename follows it so the default pointer never goes stale.
+  const renameTemplate = (id: string, to: string) => {
+    const from = rows.find((row) => row.id === id)?.key;
+    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, key: to } : row)));
+    if (from !== undefined && from !== to) {
+      setDefaultTemplate((prev) => (prev === from ? to : prev));
+    }
+  };
 
-  const removeTemplate = (key: string) =>
-    setTemplates((prev) => {
-      const { [key]: _drop, ...rest } = prev;
-      return rest;
-    });
+  // If `defaultTemplate` pointed at the removed row, reset it to "" (no
+  // default) rather than leaving it dangling on a key that no longer exists.
+  const removeTemplate = (id: string) => {
+    const removedKey = rows.find((row) => row.id === id)?.key;
+    setRows((prev) => prev.filter((row) => row.id !== id));
+    if (removedKey !== undefined) {
+      setDefaultTemplate((prev) => (prev === removedKey ? "" : prev));
+    }
+  };
 
   const addTemplate = () =>
-    setTemplates((prev) => ({ ...prev, [`template-${Object.keys(prev).length + 1}`]: { name: "" } }));
+    setRows((prev) => [
+      ...prev,
+      { id: makeRowId(), key: `template-${prev.length + 1}`, name: "" },
+    ]);
 
   const saveSandbox = async () => {
     setError("");
+    // Two rows can transiently share a key while the user is mid-rename; that
+    // is fine to hold in state but must not silently overwrite a row on save.
+    const dupes = rows.filter((row, i) => rows.findIndex((other) => other.key === row.key) !== i);
+    if (dupes.length > 0) {
+      setError(t("settings.sandbox.duplicateTemplateKey"));
+      return;
+    }
     // Backend contract: templates + api_key (direct or env) + account_id
     // (direct or env) are required. The gateway endpoint is optional — when
     // omitted the backend auto-derives it from account_id + region. Every
-    // template entry needs a non-empty `name` (the real AgentRun template).
+    // template entry needs a non-empty `name` (the real AgentRun template)
+    // and a non-empty key — a blank key would collide with the default-
+    // template <select>'s "" sentinel for "no default".
     if (
-      Object.keys(templates).length === 0 ||
-      Object.values(templates).some((tpl) => !tpl.name.trim()) ||
+      rows.length === 0 ||
+      rows.some((row) => !row.name.trim() || !row.key.trim()) ||
       (!apiKey.trim() && !apiKeyEnv.trim()) ||
       (!accountId.trim() && !accountIdEnv.trim())
     ) {
       setError("Template name, API key, and account id are required");
       return;
     }
+
+    const templates = Object.fromEntries(
+      rows.map(({ id: _id, key, ...tpl }) => [key, tpl])
+    );
 
     const next: AgentConfigDocument = {
       ...doc,
@@ -2720,13 +2759,8 @@ function SandboxConfigDialog({
               <span className="text-xs font-medium text-[var(--text-muted)]">
                 {t("settings.sandbox.templates")}
               </span>
-              <button
-                type="button"
-                aria-label="Add sandbox template"
-                onClick={addTemplate}
-                className="focus-ring inline-flex h-7 items-center gap-1 rounded-[var(--radius-sm)] px-2 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
-              >
-                <Plus className="h-3.5 w-3.5" />
+              <button type="button" aria-label="Add sandbox template" onClick={addTemplate} className={BTN_GHOST}>
+                <Plus className="h-4 w-4" />
                 Add
               </button>
             </div>
@@ -2734,14 +2768,14 @@ function SandboxConfigDialog({
               {t("settings.sandbox.templatesHelp")}
             </p>
             <div className="space-y-2">
-              {Object.entries(templates).map(([key, tpl]) => (
+              {rows.map((row) => (
                 <SandboxTemplateRow
-                  key={key}
-                  templateKey={key}
-                  template={tpl}
-                  onPatch={(patch) => setTemplate(key, patch)}
-                  onRename={(to) => renameTemplate(key, to)}
-                  onRemove={() => removeTemplate(key)}
+                  key={row.id}
+                  templateKey={row.key}
+                  template={row}
+                  onPatch={(patch) => setTemplate(row.id, patch)}
+                  onRename={(to) => renameTemplate(row.id, to)}
+                  onRemove={() => removeTemplate(row.id)}
                 />
               ))}
             </div>
@@ -2756,8 +2790,8 @@ function SandboxConfigDialog({
                 className={INPUT}
               >
                 <option value="">—</option>
-                {Object.keys(templates).map((key) => (
-                  <option key={key} value={key}>{key}</option>
+                {rows.map((row) => (
+                  <option key={row.id} value={row.key}>{row.key}</option>
                 ))}
               </select>
             </Field>
