@@ -194,25 +194,47 @@ _CAPABILITY_PROMPTS: tuple[CapabilityPrompt, ...] = (
 )
 
 
-def _code_layer_block(code_manifest: str) -> str:
+def _code_layer_block(code_manifest: str, code_writable: bool = False) -> str:
     """Code repository guidance. With a manifest (the per-agent, admin-curated
     list of what each repo is), lead with it so the model knows the repos up
-    front; without one, fall back to discover-by-`ls`."""
+    front; without one, fall back to discover-by-`ls`.
+
+    ``code_writable`` comes from the bound template's settings, not the agent —
+    it describes what the *image* did (turbox chowns /opt/code to the runtime
+    uid; pairec leaves it root-owned). Getting this wrong contradicts the
+    manifest inside one prompt, which reads to the model as an instruction not
+    to touch repositories its manifest says it may check out."""
     manifest = (code_manifest or "").strip()
     if not manifest:
         return _CODE_LAYER_GUIDANCE
-    return (
+    intro = (
+        "The code layer at `/opt/code` holds the source repositories behind this "
+        "system as git working copies, one per subdirectory. The available "
+        "repositories:"
+        if code_writable else
         "A read-only code layer at `/opt/code` holds the source repositories "
         "behind this system, one per subdirectory. The available repositories:"
-        "\n\n" + manifest + "\n\n"
+    )
+    outro = (
+        "You may check out other branches in these repositories (every branch "
+        "that existed when the image was built is already fetched; `git fetch "
+        "--deepen` or `--unshallow` for older history). Any change you make is "
+        "local to this sandbox and is discarded when it ends — nothing you do "
+        "here reaches the upstream repository, and a checkout does not persist "
+        "to your next session."
+        if code_writable else
+        "It is read-only reference material — do not try to modify it — and it "
+        "is a fallback for source-level questions, not a replacement for "
+        "knowledge_search on document questions."
+    )
+    return (
+        intro + "\n\n" + manifest + "\n\n"
         "When knowledge_search / the knowledge base does not answer a question "
         "that is really about how this system's code behaves, fall back to the "
         "code: open the relevant repository under `/opt/code` and explore it with "
         "shell / code_interpreter (ripgrep or grep to find symbols, cat to read "
         "files); run `ls /opt/code` for anything the list above does not cover. "
-        "It is read-only reference material — do not try to modify it — and it "
-        "is a fallback for source-level questions, not a replacement for "
-        "knowledge_search on document questions."
+        + outro
     )
 
 
@@ -222,6 +244,7 @@ def _render_capability_guidance(
     aliyun_pai_enabled: bool,
     code_enabled: bool,
     code_manifest: str,
+    code_writable: bool = False,
 ) -> List[str]:
     tool_set = set(tool_names)
     blocks: List[str] = []
@@ -234,7 +257,7 @@ def _render_capability_guidance(
         ):
             blocks.append(_KNOWLEDGE_AUX_GUIDANCE)
         if capability.id == "sandbox" and code_enabled:
-            blocks.append(_code_layer_block(code_manifest))
+            blocks.append(_code_layer_block(code_manifest, code_writable))
     if aliyun_pai_enabled and "shell" in tool_set:
         blocks.append(_ALIYUN_CLI_GUIDANCE)
     return blocks
@@ -243,7 +266,7 @@ def _render_capability_guidance(
 def render_stable_system_prompt(
     instructions: str, *, tool_names: List[str], project_context: str = "",
     aliyun_pai_enabled: bool = False, code_enabled: bool = False,
-    code_manifest: str = "",
+    code_manifest: str = "", code_writable: bool = False,
 ) -> str:
     """Stable, cacheable layer: the agent's persona (a single freeform Markdown
     `instructions` document) + project context + the always-on tool protocol/guidance.
@@ -259,6 +282,7 @@ def render_stable_system_prompt(
             aliyun_pai_enabled=aliyun_pai_enabled,
             code_enabled=code_enabled,
             code_manifest=code_manifest,
+            code_writable=code_writable,
         ):
             tools_section += "\n\n" + block
     else:
@@ -288,7 +312,7 @@ _SUBAGENT_PROTOCOL = (
 def render_subagent_system_prompt(
     instructions: str, *, tool_names: List[str], project_context: str = "",
     aliyun_pai_enabled: bool = False, code_enabled: bool = False,
-    code_manifest: str = "",
+    code_manifest: str = "", code_writable: bool = False,
 ) -> str:
     """A subagent's system prompt: the same stable persona + tool guidance as a
     top-level agent, with the subagent protocol appended so it does the work and
@@ -298,6 +322,7 @@ def render_subagent_system_prompt(
         instructions, tool_names=tool_names, project_context=project_context,
         aliyun_pai_enabled=aliyun_pai_enabled,
         code_enabled=code_enabled, code_manifest=code_manifest,
+        code_writable=code_writable,
     )
     return base + "\n\n# Subagent protocol\n" + _SUBAGENT_PROTOCOL
 
