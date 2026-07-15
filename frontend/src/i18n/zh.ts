@@ -730,6 +730,7 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.sandbox.templateEnvRefs": "环境变量透传（VAR=来源环境变量名）",
   "settings.sandbox.defaultTemplate": "默认模板",
   "settings.sandbox.duplicateTemplateKey": "沙箱模板 key 不能重复",
+  "settings.sandbox.blankTemplateKey": "沙箱模板 key 不能为空",
   "settings.agent.sandboxTemplate": "沙箱模板",
   "settings.agent.sandboxTemplateDefault": "使用默认",
 };

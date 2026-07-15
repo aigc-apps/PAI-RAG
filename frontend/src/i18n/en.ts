@@ -745,6 +745,7 @@ export const en = {
   "settings.sandbox.templateEnvRefs": "Env refs (VAR=SOURCE_ENV_VAR)",
   "settings.sandbox.defaultTemplate": "Default template",
   "settings.sandbox.duplicateTemplateKey": "Sandbox template keys must be unique",
+  "settings.sandbox.blankTemplateKey": "Sandbox template keys cannot be blank",
   "settings.agent.sandboxTemplate": "Sandbox template",
   "settings.agent.sandboxTemplateDefault": "Use default",
 } satisfies Record<string, string>;

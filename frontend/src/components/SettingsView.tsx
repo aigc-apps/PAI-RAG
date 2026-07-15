@@ -2545,7 +2545,20 @@ function SandboxConfigDialog({
       entries.length > 0 ? entries : [["default", { name: "" }]];
     return seeded.map(([key, tpl]) => ({ id: makeRowId(), key, ...tpl }));
   });
-  const [defaultTemplate, setDefaultTemplate] = useState(String(settings.default_template ?? ""));
+  // The default pointer is tracked by row id, not by key string. Rows already
+  // carry stable identity (see TemplateRow above) and are allowed to
+  // transiently share a key while the user edits; a key-string pointer can't
+  // tell which of two same-keyed rows it means, so a rename or removal of the
+  // *other* row can hijack or clear it (see renameTemplate/removeTemplate).
+  // At load time the incoming `settings.templates` map is an object, so its
+  // keys are unique by construction — finding the row by key here is
+  // unambiguous and only happens once, before any edits can introduce a
+  // duplicate.
+  const [defaultRowId, setDefaultRowId] = useState<string | null>(() => {
+    const key = String(settings.default_template ?? "");
+    if (!key) return null;
+    return rows.find((row) => row.key === key)?.id ?? null;
+  });
   const [sessionIdle, setSessionIdle] = useState(String(settings.session_idle_seconds ?? 600));
   const [timeout, setTimeoutValue] = useState(String(settings.timeout_seconds ?? 30));
   const [error, setError] = useState("");
@@ -2557,25 +2570,21 @@ function SandboxConfigDialog({
   // even be momentarily blank while the user clears the field to retype —
   // that is normal mid-edit state, not an error, and refusing to commit it
   // would fight React's controlled-input value restoration and revert
-  // whatever the user just typed. Both are instead caught by the save gate
-  // below. If `defaultTemplate` was pointing at this row's old key, the
-  // rename follows it so the default pointer never goes stale.
+  // whatever the user just typed. Duplicates are instead caught by the save
+  // gate below. The default pointer needs no bookkeeping here at all: it
+  // tracks the row's id, which a rename never changes.
   const renameTemplate = (id: string, to: string) => {
-    const from = rows.find((row) => row.id === id)?.key;
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, key: to } : row)));
-    if (from !== undefined && from !== to) {
-      setDefaultTemplate((prev) => (prev === from ? to : prev));
-    }
   };
 
-  // If `defaultTemplate` pointed at the removed row, reset it to "" (no
-  // default) rather than leaving it dangling on a key that no longer exists.
+  // If the default pointer was tracking the removed row (by id), reset it to
+  // null (no default) rather than leaving it dangling on a row that no
+  // longer exists. Matching by id — not by key — means removing an
+  // accidental duplicate of the default's key never disturbs the real
+  // default row.
   const removeTemplate = (id: string) => {
-    const removedKey = rows.find((row) => row.id === id)?.key;
     setRows((prev) => prev.filter((row) => row.id !== id));
-    if (removedKey !== undefined) {
-      setDefaultTemplate((prev) => (prev === removedKey ? "" : prev));
-    }
+    setDefaultRowId((prev) => (prev === id ? null : prev));
   };
 
   const addTemplate = () =>
@@ -2593,15 +2602,20 @@ function SandboxConfigDialog({
       setError(t("settings.sandbox.duplicateTemplateKey"));
       return;
     }
+    // A blank key gets its own message — it's a distinct, specific problem
+    // from the generic trio below, and "Template name, API key, and account
+    // id are required" doesn't mention it at all.
+    if (rows.some((row) => !row.key.trim())) {
+      setError(t("settings.sandbox.blankTemplateKey"));
+      return;
+    }
     // Backend contract: templates + api_key (direct or env) + account_id
     // (direct or env) are required. The gateway endpoint is optional — when
     // omitted the backend auto-derives it from account_id + region. Every
-    // template entry needs a non-empty `name` (the real AgentRun template)
-    // and a non-empty key — a blank key would collide with the default-
-    // template <select>'s "" sentinel for "no default".
+    // template entry needs a non-empty `name` (the real AgentRun template).
     if (
       rows.length === 0 ||
-      rows.some((row) => !row.name.trim() || !row.key.trim()) ||
+      rows.some((row) => !row.name.trim()) ||
       (!apiKey.trim() && !apiKeyEnv.trim()) ||
       (!accountId.trim() && !accountIdEnv.trim())
     ) {
@@ -2612,6 +2626,7 @@ function SandboxConfigDialog({
     const templates = Object.fromEntries(
       rows.map(({ id: _id, key, ...tpl }) => [key, tpl])
     );
+    const defaultTemplate = rows.find((row) => row.id === defaultRowId)?.key ?? "";
 
     const next: AgentConfigDocument = {
       ...doc,
@@ -2785,13 +2800,13 @@ function SandboxConfigDialog({
             <Field label={t("settings.sandbox.defaultTemplate")}>
               <select
                 aria-label={t("settings.sandbox.defaultTemplate")}
-                value={defaultTemplate}
-                onChange={(event) => setDefaultTemplate(event.target.value)}
+                value={defaultRowId ?? ""}
+                onChange={(event) => setDefaultRowId(event.target.value || null)}
                 className={INPUT}
               >
                 <option value="">—</option>
                 {rows.map((row) => (
-                  <option key={row.id} value={row.key}>{row.key}</option>
+                  <option key={row.id} value={row.id}>{row.key}</option>
                 ))}
               </select>
             </Field>

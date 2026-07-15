@@ -456,6 +456,139 @@ describe("SettingsView", () => {
     expect(provider?.settings.default_template).toBe("");
   });
 
+  it("keeps the tracked default when an accidental duplicate of its key is removed instead", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const docWithDefault: AgentConfigDocument = {
+      ...baseDoc,
+      providers: baseDoc.providers.map((p) =>
+        p.id === "sandbox.default"
+          ? {
+              ...p,
+              settings: {
+                ...p.settings,
+                templates: { default: { name: "code-template" } },
+                default_template: "default",
+              },
+            }
+          : p
+      ),
+    };
+
+    render(<SettingsView doc={docWithDefault} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // Row A ("default") is tracked as the default. Add row B, then rename it
+    // to "default" too — a transient duplicate the row-array model
+    // explicitly allows mid-edit (real per-keystroke typing, since the
+    // per-keystroke renameTemplate wiring is what the bug depends on).
+    await user.click(screen.getByRole("button", { name: "Add sandbox template" }));
+    const nameInputs = screen.getAllByLabelText("Sandbox template name");
+    await user.type(nameInputs[1], "second-template");
+
+    const keyInputs = screen.getAllByLabelText("Sandbox template key");
+    await user.clear(keyInputs[1]);
+    await user.type(keyInputs[1], "default");
+
+    // Both rows are now keyed "default"; the default pointer (tracked by row
+    // id) still means row A. Remove row B — the accidental duplicate, not
+    // the real default — by index, since both rows now share the same
+    // accessible "Remove template default" name.
+    const removeButtons = screen.getAllByRole("button", { name: /^Remove template/ });
+    expect(removeButtons).toHaveLength(2);
+    await user.click(removeButtons[1]);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const provider = saved.providers.find((item) => item.id === "sandbox.default");
+    expect(provider?.settings.templates).toEqual({ default: { name: "code-template" } });
+    // Row A's default survives — it must NOT have been cleared by removing
+    // the same-keyed row B.
+    expect(provider?.settings.default_template).toBe("default");
+  });
+
+  it("keeps the default following its own row through a key swap, not the other row", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const docWithDefault: AgentConfigDocument = {
+      ...baseDoc,
+      providers: baseDoc.providers.map((p) =>
+        p.id === "sandbox.default"
+          ? {
+              ...p,
+              settings: {
+                ...p.settings,
+                templates: { default: { name: "code-template" } },
+                default_template: "default",
+              },
+            }
+          : p
+      ),
+    };
+
+    render(<SettingsView doc={docWithDefault} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // Row A ("default") is tracked as the default. Add row B, which is
+    // seeded with key "template-2".
+    await user.click(screen.getByRole("button", { name: "Add sandbox template" }));
+    const nameInputs = screen.getAllByLabelText("Sandbox template name");
+    await user.type(nameInputs[1], "second-template");
+
+    // Swap A's and B's keys via real per-keystroke typing — this is the
+    // wiring the bug depends on (a real renameTemplate fires on every
+    // keystroke, so the pointer sees every intermediate value too).
+    const keyInputs = screen.getAllByLabelText("Sandbox template key");
+    await user.clear(keyInputs[0]);
+    await user.type(keyInputs[0], "template-2");
+    await user.clear(keyInputs[1]);
+    await user.type(keyInputs[1], "default");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const provider = saved.providers.find((item) => item.id === "sandbox.default");
+    expect(provider?.settings.templates).toEqual({
+      "template-2": { name: "code-template" },
+      default: { name: "second-template" },
+    });
+    // The default must still follow row A (now keyed "template-2"), not row
+    // B (which now happens to be keyed "default").
+    expect(provider?.settings.default_template).toBe("template-2");
+  });
+
+  it("shows a dedicated message when a template key is left blank", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // api_key_env + account_id_env are pre-filled in baseDoc; fill in the
+    // name so the only remaining problem is the blank key.
+    await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
+    const keyInput = screen.getByLabelText("Sandbox template key");
+    await user.clear(keyInput);
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("沙箱模板 key 不能为空")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Template name, API key, and account id are required")
+    ).not.toBeInTheDocument();
+  });
+
   it("binds an agent to a sandbox template by key", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
