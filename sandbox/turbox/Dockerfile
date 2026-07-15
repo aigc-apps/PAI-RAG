@@ -32,13 +32,24 @@ ARG TURBOX_REPOS="\
 # code_writable. Writes land in the container's per-instance layer and are
 # discarded with the sandbox — the image and upstream are never touched.
 USER root
+# The secret mount above is READ-ONLY, but `git-credential-store` writes the
+# entry back to its file after a successful auth -- pointed straight at the
+# mount, that write fails with "unable to get credential storage lock" on
+# every clone. The clone still succeeds (git carries on past a credential
+# helper failure), but the build log fills with `fatal:` lines that read
+# exactly like the real failure a user watching the build would be looking
+# for. Copy the secret to a writable path first and point the helper there
+# instead; the copy must not survive this RUN (one layer, created and
+# deleted in the same instruction) or it would ship inside the image.
 RUN --mount=type=secret,id=gitcred,target=/root/.git-credentials \
     set -eu; \
+    cp /root/.git-credentials /root/.git-credentials.rw; \
     for spec in ${TURBOX_REPOS}; do \
       url="${spec%@*}"; ref="${spec##*@}"; name="$(basename "$url" .git)"; \
-      git -c credential.helper='store --file=/root/.git-credentials' \
+      git -c credential.helper='store --file=/root/.git-credentials.rw' \
           clone --depth 1 --no-single-branch -b "$ref" "$url" "/opt/code/$name"; \
     done \
+ && rm -f /root/.git-credentials.rw \
  && git config --system credential."http://gitlab.alibaba-inc.com".helper env \
  && chown -R 1000:1000 /opt/code \
  && echo "cloned code layer:" && ls -1 /opt/code
