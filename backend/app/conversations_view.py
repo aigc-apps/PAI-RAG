@@ -7,6 +7,30 @@ def _text(content: dict) -> str:
     return (content or {}).get("text", "") or ""
 
 
+def _timeline(content: dict) -> Optional[List[Dict[str, str]]]:
+    value = (content or {}).get("timeline")
+    if not isinstance(value, list) or not value:
+        return None
+    steps: List[Dict[str, str]] = []
+    for step in value:
+        if not isinstance(step, dict):
+            return None
+        kind = step.get("kind")
+        if kind in ("reasoning", "text"):
+            text = step.get("text")
+            if not isinstance(text, str):
+                return None
+            steps.append({"kind": kind, "text": text})
+        elif kind == "tool":
+            call_id = step.get("id")
+            if not isinstance(call_id, str) or not call_id:
+                return None
+            steps.append({"kind": "tool", "id": call_id})
+        else:
+            return None
+    return steps
+
+
 def group_conversation_messages(
     items: List[Item], responses: List[StoredResponse]
 ) -> List[Dict]:
@@ -69,16 +93,18 @@ def group_conversation_messages(
                 }
                 for c in fcalls
             ]
-            messages.append(
-                {
-                    "role": "assistant",
-                    "text": _text(assistant_item.content) if assistant_item else "",
-                    "reasoning": _text(reasoning_item.content) if reasoning_item else None,
-                    "response_id": key,
-                    "previous_response_id": resp.previous_response_id if resp else None,
-                    "status": resp.status if resp else "completed",
-                    "tool_calls": tool_calls,
-                    "usage": resp.usage if resp else None,
-                }
-            )
+            assistant_message = {
+                "role": "assistant",
+                "text": _text(assistant_item.content) if assistant_item else "",
+                "reasoning": _text(reasoning_item.content) if reasoning_item else None,
+                "response_id": key,
+                "previous_response_id": resp.previous_response_id if resp else None,
+                "status": resp.status if resp else "completed",
+                "tool_calls": tool_calls,
+                "usage": resp.usage if resp else None,
+            }
+            timeline = _timeline(assistant_item.content) if assistant_item else None
+            if timeline is not None:
+                assistant_message["steps"] = timeline
+            messages.append(assistant_message)
     return messages
