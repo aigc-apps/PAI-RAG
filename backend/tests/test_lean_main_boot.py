@@ -35,7 +35,7 @@ def test_new_database_uses_clean_builtin_config_instead_of_local_yaml(tmp_path):
     assert seed.knowledgebase.vectordb.engine == "local"
     sandbox = next(provider for provider in seed.providers if provider.id == "sandbox.default")
     assert sandbox.settings["endpoint"] == ""
-    assert sandbox.settings["template_name"] == ""
+    assert sandbox.settings["templates"] == {}
 
 
 def _capture_database_log(settings) -> str:

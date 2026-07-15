@@ -176,6 +176,17 @@ class AgentCodeConfig(BaseModel):
     manifest: str = ""
 
 
+class AgentSandboxConfig(BaseModel):
+    """Which sandbox template this agent runs on. ``template`` is a key into
+    ``sandbox.default.settings.templates``; blank uses that provider's
+    ``default_template``. An unknown key is a hard error at sandbox-create time
+    (see ``sandbox_providers._resolve_template``) rather than a silent fallback —
+    running an agent on the wrong image gives it a ``/opt/code`` that contradicts
+    its own code manifest, which is far harder to diagnose than a failed create."""
+
+    template: str = ""
+
+
 class AgentProfile(BaseModel):
     id: str
     name: str
@@ -191,6 +202,9 @@ class AgentProfile(BaseModel):
     # Explicit per-agent code access. The full config document is persisted in SQL,
     # so this nested object needs no separate relational schema or migration.
     code: AgentCodeConfig = Field(default_factory=AgentCodeConfig)
+    # Which sandbox image this agent gets. Coupled to ``code`` above: the manifest
+    # describes the repositories the bound template's image actually ships.
+    sandbox: AgentSandboxConfig = Field(default_factory=AgentSandboxConfig)
     tools: AgentToolsConfig = Field(default_factory=AgentToolsConfig)
     skills: AgentSkillsConfig = Field(default_factory=AgentSkillsConfig)
     settings: Dict[str, Any] = Field(default_factory=dict)
@@ -291,7 +305,8 @@ DEFAULT_DOCUMENT = AgentConfigDocument(
                 "endpoint": "",
                 "api_key_env": "AGENTRUN_SANDBOX_API_KEY",
                 "api_key_header": "X-API-Key",
-                "template_name": "",
+                "templates": {},
+                "default_template": "",
                 "template_type": "CodeInterpreter",
                 "region": "cn-hangzhou",
                 "access_key_id_env": "AGENTRUN_ACCESS_KEY_ID",
@@ -574,7 +589,7 @@ def mask_secrets(doc: AgentConfigDocument) -> AgentConfigDocument:
     return out
 
 
-def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentConfigDocument:
+def apply_runtime_status(doc: AgentConfigDocument, settings=None, router=None) -> AgentConfigDocument:
     out = doc.model_copy(deep=True)
     _merge_discovered_skills(out)
     providers = {p.id: p for p in out.providers}
@@ -697,19 +712,19 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         sandbox_provider_name = sandbox_settings.get("provider")
         configured = False
         if sandbox_provider_name == "agentrun_rest":
-            # Mirror make_sandbox_provider's gate: template_name + api_key +
+            # Mirror make_sandbox_provider's gate: templates + api_key +
             # account_id are required. The gateway endpoint is optional and
             # auto-derived from account_id + region, so don't gate status on it
             # (an empty endpoint would otherwise mislabel a working provider as
             # missing_config).
             configured = bool(
-                sandbox_settings.get("template_name")
+                sandbox_settings.get("templates")
                 and _setting_configured(sandbox_settings, "api_key", "api_key_env")
                 and _setting_configured(sandbox_settings, "account_id", "account_id_env")
             )
         elif sandbox_provider_name == "agentrun":
             configured = (
-                bool(sandbox_settings.get("template_name"))
+                bool(sandbox_settings.get("templates"))
                 and _setting_configured(sandbox_settings, "access_key_id", "access_key_id_env")
                 and _setting_configured(sandbox_settings, "access_key_secret", "access_key_secret_env")
                 and _setting_configured(sandbox_settings, "account_id", "account_id_env")
@@ -721,7 +736,7 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         )
         sandbox_provider.secret_configured = _configured_secret(sandbox_settings)
         sandbox_provider.error = None if sandbox_provider.status != "missing_config" else (
-            "Configure sandbox provider, endpoint/template, and credentials when required"
+            "Configure sandbox provider, templates, and credentials when required"
         )
     if sandbox is not None:
         if not _cap_on(sandbox):
