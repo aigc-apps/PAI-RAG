@@ -29,7 +29,7 @@ import { generateCodeManifest, newAgentProfile } from "../api/agentConfig";
 import { listKnowledgeBases } from "../api/knowledge";
 import type { KnowledgeBase } from "../api/knowledge";
 import { cn } from "../lib/cn";
-import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, BTN_DANGER } from "../lib/ui";
+import { CARD, INPUT, BTN_PRIMARY, BTN_GHOST, BTN_DANGER, ICON_BTN } from "../lib/ui";
 import { useAgentConfigStore } from "../store/agentConfig";
 import { useAliyunDialog } from "../store/aliyunDialog";
 import { ConnectionsPanel } from "./ConnectionsPanel";
@@ -1063,6 +1063,10 @@ function ToolsDialog({
   onClose: () => void;
 }) {
   const { t } = useI18n();
+  const sandboxTemplates =
+    (doc.providers.find((p) => p.id === "sandbox.default")?.settings.templates as
+      | Record<string, SandboxTemplate>
+      | undefined) ?? {};
   return (
     <EditorDialog title={`Capabilities — ${agent.name}`} onClose={onClose} wide>
       <ToolsGrid tools={tools} enabled={enabled} loading={loading} onToggle={onToggle} />
@@ -1087,6 +1091,23 @@ function ToolsDialog({
               }))}
               className="mt-1 h-4 w-4 accent-[var(--accent)]"
             />
+          </label>
+          <label className="block text-xs font-medium text-[var(--text-muted)]">
+            <span className="mb-1.5 block">{t("settings.agent.sandboxTemplate")}</span>
+            <select
+              aria-label={t("settings.agent.sandboxTemplate")}
+              value={agent.sandbox?.template ?? ""}
+              disabled={loading}
+              onChange={(event) => void onSave(applyAgentPatch(doc, agent.id, {
+                sandbox: { ...agent.sandbox, template: event.target.value },
+              }))}
+              className={INPUT}
+            >
+              <option value="">{t("settings.agent.sandboxTemplateDefault")}</option>
+              {Object.keys(sandboxTemplates).map((key) => (
+                <option key={key} value={key}>{key}</option>
+              ))}
+            </select>
           </label>
           {agent.code.enabled && (
             <CodeManifestSection doc={doc} agent={agent} loading={loading} onSave={onSave} />
@@ -2392,6 +2413,99 @@ function VectorDBConfigDialog({
   );
 }
 
+// A sandbox template binds an agent-facing key (e.g. "turbox") to a template
+// registered by that real name in the AgentRun console. `code_writable`
+// records what the underlying image did (whether it chowns /opt/code to the
+// runtime user) — it is never a per-agent permission. `env_refs` maps an env
+// var name the sandbox receives to the name of the service-side env var to
+// read it from; the value is a name, never a secret.
+type SandboxTemplate = {
+  name: string;
+  code_writable?: boolean;
+  env_refs?: Record<string, string>;
+};
+
+// env_refs <-> "VAR=SOURCE_ENV_VAR, VAR2=OTHER" round-trip. Pure — hoisted to
+// module scope so both the dialog and each template row can share it.
+function envRefsToText(refs?: Record<string, string>) {
+  return Object.entries(refs ?? {}).map(([v, e]) => `${v}=${e}`).join(", ");
+}
+
+function envRefsFromText(text: string): Record<string, string> {
+  return Object.fromEntries(
+    text.split(",").map((p) => p.trim()).filter(Boolean)
+      .map((p) => p.split("=", 2)).filter(([v, e]) => v?.trim() && e?.trim())
+      .map(([v, e]) => [v.trim(), e.trim()]),
+  );
+}
+
+/** One row of the sandbox templates editor. Owns local state for the raw
+ * env_refs text so a value the admin is mid-way through typing (e.g. "VAR=",
+ * no value yet) is never clobbered by re-deriving the input's value from the
+ * last fully-parsed env_refs map. */
+function SandboxTemplateRow({
+  templateKey,
+  template,
+  onPatch,
+  onRename,
+  onRemove,
+}: {
+  templateKey: string;
+  template: SandboxTemplate;
+  onPatch: (patch: Partial<SandboxTemplate>) => void;
+  onRename: (to: string) => void;
+  onRemove: () => void;
+}) {
+  const { t } = useI18n();
+  const [envRefsText, setEnvRefsText] = useState(() => envRefsToText(template.env_refs));
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg-elevated)] p-2">
+      <input
+        aria-label="Sandbox template key"
+        value={templateKey}
+        onChange={(event) => onRename(event.target.value)}
+        className={cn(INPUT, "w-28 flex-none")}
+      />
+      <input
+        aria-label="Sandbox template name"
+        value={template.name}
+        placeholder={t("settings.sandbox.templateName")}
+        onChange={(event) => onPatch({ name: event.target.value })}
+        className={cn(INPUT, "min-w-[10rem] flex-1")}
+      />
+      <input
+        aria-label="Sandbox template env refs"
+        value={envRefsText}
+        placeholder={t("settings.sandbox.templateEnvRefs")}
+        onChange={(event) => {
+          const text = event.target.value;
+          setEnvRefsText(text);
+          onPatch({ env_refs: envRefsFromText(text) });
+        }}
+        className={cn(INPUT, "min-w-[12rem] flex-1")}
+      />
+      <label className="flex flex-none items-center gap-1.5 whitespace-nowrap text-xs text-[var(--text-muted)]">
+        <input
+          type="checkbox"
+          checked={!!template.code_writable}
+          onChange={(event) => onPatch({ code_writable: event.target.checked })}
+          className="h-4 w-4 accent-[var(--accent)]"
+        />
+        {t("settings.sandbox.templateWritable")}
+      </label>
+      <button
+        type="button"
+        aria-label={`Remove template ${templateKey}`}
+        onClick={onRemove}
+        className={ICON_BTN}
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 function SandboxConfigDialog({
   doc,
   loading,
@@ -2403,6 +2517,7 @@ function SandboxConfigDialog({
   onClose: () => void;
   onSave: (doc: AgentConfigDocument) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const provider = doc.providers.find((p) => p.id === "sandbox.default");
   const sandbox = doc.capabilities.find((cap) => cap.id === "sandbox");
   const settings = provider?.settings ?? {};
@@ -2411,18 +2526,47 @@ function SandboxConfigDialog({
   const [apiKeyEnv, setApiKeyEnv] = useState(String(settings.api_key_env ?? "AGENTRUN_SANDBOX_API_KEY"));
   const [accountId, setAccountId] = useState(String(settings.account_id ?? ""));
   const [accountIdEnv, setAccountIdEnv] = useState(String(settings.account_id_env ?? "AGENTRUN_ACCOUNT_ID"));
-  const [templateName, setTemplateName] = useState(String(settings.template_name ?? ""));
+  const [templates, setTemplates] = useState<Record<string, SandboxTemplate>>(() => {
+    const initial = (settings.templates as Record<string, SandboxTemplate>) ?? {};
+    // Never start the editor with zero rows — an empty list reads as "broken"
+    // rather than "not configured yet".
+    return Object.keys(initial).length > 0 ? initial : { default: { name: "" } };
+  });
+  const [defaultTemplate, setDefaultTemplate] = useState(String(settings.default_template ?? ""));
   const [sessionIdle, setSessionIdle] = useState(String(settings.session_idle_seconds ?? 600));
   const [timeout, setTimeoutValue] = useState(String(settings.timeout_seconds ?? 30));
   const [error, setError] = useState("");
 
+  const setTemplate = (key: string, patch: Partial<SandboxTemplate>) =>
+    setTemplates((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+
+  const renameTemplate = (from: string, to: string) =>
+    setTemplates((prev) => {
+      if (!to.trim() || (to !== from && to in prev)) return prev;
+      const next: Record<string, SandboxTemplate> = {};
+      // rebuild in order so the row does not jump while typing
+      for (const [k, v] of Object.entries(prev)) next[k === from ? to : k] = v;
+      return next;
+    });
+
+  const removeTemplate = (key: string) =>
+    setTemplates((prev) => {
+      const { [key]: _drop, ...rest } = prev;
+      return rest;
+    });
+
+  const addTemplate = () =>
+    setTemplates((prev) => ({ ...prev, [`template-${Object.keys(prev).length + 1}`]: { name: "" } }));
+
   const saveSandbox = async () => {
     setError("");
-    // Backend contract: template_name + api_key (direct or env) + account_id
+    // Backend contract: templates + api_key (direct or env) + account_id
     // (direct or env) are required. The gateway endpoint is optional — when
-    // omitted the backend auto-derives it from account_id + region.
+    // omitted the backend auto-derives it from account_id + region. Every
+    // template entry needs a non-empty `name` (the real AgentRun template).
     if (
-      !templateName.trim() ||
+      Object.keys(templates).length === 0 ||
+      Object.values(templates).some((tpl) => !tpl.name.trim()) ||
       (!apiKey.trim() && !apiKeyEnv.trim()) ||
       (!accountId.trim() && !accountIdEnv.trim())
     ) {
@@ -2444,7 +2588,8 @@ function SandboxConfigDialog({
                 api_key_env: apiKeyEnv,
                 api_key_header: "X-API-Key",
                 account_id_env: accountIdEnv,
-                template_name: templateName,
+                templates,
+                default_template: defaultTemplate,
                 template_type: "CodeInterpreter",
                 isolation_scope: "conversation",
                 idle_timeout_seconds: Number(sessionIdle) || 600,
@@ -2508,15 +2653,6 @@ function SandboxConfigDialog({
                 </span>
               )}
             </Field>
-            <Field label="Template name">
-              <input
-                aria-label="Sandbox template name"
-                value={templateName}
-                placeholder="code-interpreter-template"
-                onChange={(event) => setTemplateName(event.target.value)}
-                className={INPUT}
-              />
-            </Field>
             <Field label="Gateway API key">
               <input
                 aria-label="Sandbox gateway API key"
@@ -2576,6 +2712,54 @@ function SandboxConfigDialog({
                 onChange={(event) => setTimeoutValue(event.target.value)}
                 className={INPUT}
               />
+            </Field>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-[var(--text-muted)]">
+                {t("settings.sandbox.templates")}
+              </span>
+              <button
+                type="button"
+                aria-label="Add sandbox template"
+                onClick={addTemplate}
+                className="focus-ring inline-flex h-7 items-center gap-1 rounded-[var(--radius-sm)] px-2 text-xs font-medium text-[var(--text-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--text)]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </div>
+            <p className="text-xs text-[var(--text-faint)]">
+              {t("settings.sandbox.templatesHelp")}
+            </p>
+            <div className="space-y-2">
+              {Object.entries(templates).map(([key, tpl]) => (
+                <SandboxTemplateRow
+                  key={key}
+                  templateKey={key}
+                  template={tpl}
+                  onPatch={(patch) => setTemplate(key, patch)}
+                  onRename={(to) => renameTemplate(key, to)}
+                  onRemove={() => removeTemplate(key)}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-[var(--text-faint)]">
+              {t("settings.sandbox.templateWritableHelp")}
+            </p>
+            <Field label={t("settings.sandbox.defaultTemplate")}>
+              <select
+                aria-label={t("settings.sandbox.defaultTemplate")}
+                value={defaultTemplate}
+                onChange={(event) => setDefaultTemplate(event.target.value)}
+                className={INPUT}
+              >
+                <option value="">—</option>
+                {Object.keys(templates).map((key) => (
+                  <option key={key} value={key}>{key}</option>
+                ))}
+              </select>
             </Field>
           </div>
 

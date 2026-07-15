@@ -144,6 +144,13 @@ export interface AgentCodeConfig {
   manifest: string;
 }
 
+// Which sandbox provider template this agent binds to, by key (see
+// ProviderConfig "sandbox.default".settings.templates). Blank means "use the
+// provider's default_template".
+export interface AgentSandboxConfig {
+  template?: string;
+}
+
 export interface AgentProfile {
   id: string;
   name: string;
@@ -156,6 +163,9 @@ export interface AgentProfile {
   knowledge: AgentKnowledgeConfig;
   // Explicit per-agent code repository access and optional prompt manifest.
   code: AgentCodeConfig;
+  // Which sandbox template this agent binds to. Optional/absent means
+  // "use the provider's default_template".
+  sandbox?: AgentSandboxConfig;
   tools: AgentToolsConfig;
   skills: AgentSkillsConfig;
   settings: Record<string, unknown>;

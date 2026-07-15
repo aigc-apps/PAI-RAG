@@ -737,4 +737,13 @@ export const en = {
     "Advanced raw configuration for agents and shared capabilities. Secrets are masked when loaded from the API.",
   "settings.reloadYaml": "Reload",
   "settings.saveYaml": "Save YAML",
+  "settings.sandbox.templates": "Sandbox templates",
+  "settings.sandbox.templatesHelp": "Each key names an AgentRun template. Agents bind one by key.",
+  "settings.sandbox.templateName": "Template name in AgentRun",
+  "settings.sandbox.templateWritable": "Code layer is writable",
+  "settings.sandbox.templateWritableHelp": "Set this when the image's /opt/code is owned by the runtime user (git working copies the agent can check out). Must match the image.",
+  "settings.sandbox.templateEnvRefs": "Env refs (VAR=SOURCE_ENV_VAR)",
+  "settings.sandbox.defaultTemplate": "Default template",
+  "settings.agent.sandboxTemplate": "Sandbox template",
+  "settings.agent.sandboxTemplateDefault": "Use default",
 } satisfies Record<string, string>;

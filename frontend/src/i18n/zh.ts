@@ -722,4 +722,13 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.yamlBody": "高级原始配置，包含 Agent 与共享能力。通过 API 读取时会隐藏密钥。",
   "settings.reloadYaml": "重新加载",
   "settings.saveYaml": "保存 YAML",
+  "settings.sandbox.templates": "沙箱模板",
+  "settings.sandbox.templatesHelp": "每个 key 对应一个 AgentRun 模板，Agent 按 key 绑定。",
+  "settings.sandbox.templateName": "AgentRun 中的模板名",
+  "settings.sandbox.templateWritable": "代码层可写",
+  "settings.sandbox.templateWritableHelp": "当镜像的 /opt/code 归运行时用户所有（agent 可 checkout 的 git 工作区）时勾选。必须与镜像一致。",
+  "settings.sandbox.templateEnvRefs": "环境变量透传（VAR=来源环境变量名）",
+  "settings.sandbox.defaultTemplate": "默认模板",
+  "settings.agent.sandboxTemplate": "沙箱模板",
+  "settings.agent.sandboxTemplateDefault": "使用默认",
 };

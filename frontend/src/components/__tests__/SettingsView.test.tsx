@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { SettingsView } from "../SettingsView";
 import { useAgentConfigStore } from "../../store/agentConfig";
@@ -65,7 +65,8 @@ const baseDoc: AgentConfigDocument = {
         api_key_env: "AGENTRUN_SANDBOX_API_KEY",
         api_key_header: "X-API-Key",
         account_id_env: "AGENTRUN_ACCOUNT_ID",
-        template_name: "",
+        templates: {},
+        default_template: "",
         template_type: "CodeInterpreter",
         isolation_scope: "conversation",
         idle_timeout_seconds: 600,
@@ -182,7 +183,7 @@ describe("SettingsView", () => {
 
     expect(provider?.settings.provider).toBe("agentrun_rest");
     expect(provider?.settings.endpoint).toBe("https://sandbox-gateway.internal");
-    expect(provider?.settings.template_name).toBe("code-template");
+    expect(provider?.settings.templates).toEqual({ default: { name: "code-template" } });
     expect(provider?.settings.api_key_header).toBe("X-API-Key");
     expect(provider?.settings.account_id_env).toBe("ALIYUN_ACCOUNT_ID");
     expect(provider?.settings.isolation_scope).toBe("conversation");
@@ -219,7 +220,7 @@ describe("SettingsView", () => {
     // Leave gateway endpoint empty — backend auto-derives from account id.
     await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
     // api_key_env + account_id_env are pre-filled in baseDoc, satisfying the
-    // required trio (template_name + api_key + account_id) without an endpoint.
+    // required trio (templates + api_key + account_id) without an endpoint.
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -227,7 +228,7 @@ describe("SettingsView", () => {
     const saved = save.mock.calls[0][0] as AgentConfigDocument;
     const provider = saved.providers.find((item) => item.id === "sandbox.default");
     expect(provider?.settings.endpoint).toBe("");
-    expect(provider?.settings.template_name).toBe("code-template");
+    expect(provider?.settings.templates).toEqual({ default: { name: "code-template" } });
   });
 
   it("blocks save when api key and env are both missing", async () => {
@@ -247,6 +248,125 @@ describe("SettingsView", () => {
 
     expect(save).not.toHaveBeenCalled();
     expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+  });
+
+  it("blocks save when the templates map is empty", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // The dialog seeds one blank "default" row so the form never opens
+    // empty; removing it reaches a genuinely empty templates map.
+    await user.click(screen.getByRole("button", { name: "Remove template default" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+  });
+
+  it("blocks save when a template entry has a blank name", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // api_key_env + account_id_env are pre-filled in baseDoc — the only thing
+    // missing is a name on the seeded "default" row.
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+  });
+
+  it("keeps both entries when a rename collides with an existing key", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    await user.type(screen.getByLabelText("Sandbox template name"), "default-template");
+    await user.click(screen.getByRole("button", { name: "Add sandbox template" }));
+
+    const nameInputs = screen.getAllByLabelText("Sandbox template name");
+    await user.type(nameInputs[1], "second-template");
+
+    // Attempt to rename the second row ("template-2", since "default" already
+    // occupies slot 1) to the first row's key ("default"). renameTemplate must
+    // refuse the collision, not overwrite it.
+    const keyInputs = screen.getAllByLabelText("Sandbox template key");
+    fireEvent.change(keyInputs[1], { target: { value: "default" } });
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    const provider = saved.providers.find((item) => item.id === "sandbox.default");
+    expect(provider?.settings.templates).toEqual({
+      default: { name: "default-template" },
+      "template-2": { name: "second-template" },
+    });
+  });
+
+  it("preserves an in-progress env_refs value while typing a var name", async () => {
+    const user = userEvent.setup();
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // "GITLAB_TOKEN=" parses to an empty env_refs map (no value yet) — the
+    // input must still show exactly what was typed, not snap back to "".
+    await user.type(screen.getByLabelText("Sandbox template env refs"), "GITLAB_TOKEN=");
+
+    expect(screen.getByLabelText("Sandbox template env refs")).toHaveValue("GITLAB_TOKEN=");
+  });
+
+  it("binds an agent to a sandbox template by key", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+    const withTemplatesDoc: AgentConfigDocument = {
+      ...codeToolsDoc,
+      providers: codeToolsDoc.providers.map((p) =>
+        p.id === "sandbox.default"
+          ? {
+              ...p,
+              settings: {
+                ...p.settings,
+                templates: {
+                  turbox: { name: "sandbox-turbox-feiyue", code_writable: true },
+                  pairec: { name: "sandbox-pairec" },
+                },
+                default_template: "pairec",
+              },
+            }
+          : p
+      ),
+    };
+
+    render(<SettingsView doc={withTemplatesDoc} onBack={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "编辑能力" }));
+
+    // The app defaults to the zh locale in tests, so the picker's accessible
+    // name is the i18n'd Chinese label, not the English key value.
+    await user.selectOptions(screen.getByLabelText("沙箱模板"), "turbox");
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.agents[0].sandbox?.template).toBe("turbox");
   });
 
   it("configures the global elasticsearch vector database", async () => {
