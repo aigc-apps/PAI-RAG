@@ -1,5 +1,5 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -11,21 +11,23 @@ import tailwindcss from "@tailwindcss/vite";
 //
 // Build/preview don't proxy; there the `/v1` paths are served by whatever fronts
 // the bundle, so this affects `npm run dev` only.
-const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8000";
+export default defineConfig(({ mode }) => {
+  const backendUrl = loadEnv(mode, ".", "").BACKEND_URL || "http://localhost:8000";
 
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: {
-    proxy: {
-      "/v1": {
-        target: BACKEND_URL,
-        changeOrigin: true,
+  return {
+    plugins: [react(), tailwindcss()],
+    server: {
+      proxy: {
+        "/v1": {
+          target: backendUrl,
+          changeOrigin: true,
+        },
       },
     },
-  },
-  test: {
-    environment: "jsdom",
-    globals: true,
-    setupFiles: ["./vitest.setup.ts"],
-  },
+    test: {
+      environment: "jsdom",
+      globals: true,
+      setupFiles: ["./vitest.setup.ts"],
+    },
+  };
 });
