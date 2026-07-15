@@ -58,13 +58,14 @@ export interface ToolUse {
 }
 
 /**
- * One entry in an assistant turn's ordered timeline. A `text` step is a run of
- * assistant prose; a `tool` step references a {@link ToolUse} by id. Steps are
- * appended in stream order, so interstitial narration ("我先加载技能…") and the
- * tool calls it precedes stay interleaved — letting the UI show that narration
- * as working/thinking and keep only the final text run as the answer body.
+ * One entry in an assistant turn's ordered timeline. Reasoning and ordinary
+ * assistant prose are separate text runs; a `tool` step references a
+ * {@link ToolUse} by id. Steps are appended in stream order so the UI can keep
+ * the execution process interleaved and reserve only the final text run for the
+ * answer body.
  */
 export type AssistantStep =
+  | { kind: "reasoning"; text: string }
   | { kind: "text"; text: string }
   | { kind: "tool"; id: string };
 
@@ -84,9 +85,8 @@ export interface ChatMessage {
   lastSequenceNumber?: number;
   toolCalls: ToolUse[];
   /**
-   * Ordered text/tool timeline for a live-streamed assistant turn. Absent on
-   * reloaded history (persistence collapses the turn to one `text` blob), where
-   * the UI falls back to `text` + `toolCalls`.
+   * Ordered reasoning/text/tool timeline. New history records persist it;
+   * pre-change history omits it and falls back to aggregate fields.
    */
   steps?: AssistantStep[];
 }

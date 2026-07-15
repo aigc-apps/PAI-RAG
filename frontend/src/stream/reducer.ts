@@ -32,6 +32,36 @@ function finalAnswer(steps: AssistantStep[]): string {
   return last && last.kind === "text" ? last.text : "";
 }
 
+function seededSteps(msg: ChatMessage): AssistantStep[] {
+  if (msg.steps !== undefined) return msg.steps.slice();
+  const steps: AssistantStep[] = [];
+  if (msg.reasoning) steps.push({ kind: "reasoning", text: msg.reasoning });
+  if (msg.text) steps.push({ kind: "text", text: msg.text });
+  return steps;
+}
+
+function appendTextStep(
+  steps: AssistantStep[],
+  kind: "reasoning" | "text",
+  delta: string
+): AssistantStep[] {
+  if (!delta) return steps;
+  const last = steps[steps.length - 1];
+  if (last && last.kind === kind) {
+    steps[steps.length - 1] = { kind, text: last.text + delta };
+  } else {
+    steps.push({ kind, text: delta });
+  }
+  return steps;
+}
+
+function appendToolStep(steps: AssistantStep[], id: string): AssistantStep[] {
+  if (!steps.some((step) => step.kind === "tool" && step.id === id)) {
+    steps.push({ kind: "tool", id });
+  }
+  return steps;
+}
+
 function callIdOf(e: Record<string, unknown>): string {
   const item = e.item as { call_id?: string; id?: string } | undefined;
   const raw = (e.call_id as string) || item?.call_id || (e.item_id as string) || item?.id || "";
@@ -72,19 +102,7 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
       // Append to the open text run, or start a new one if a tool call closed
       // the previous run. Keep `text` pointed at the trailing run so it always
       // holds the final answer (earlier runs are interstitial narration).
-      const steps = (msg.steps ?? []).slice();
-      // Resume path: a reconstructed bubble may carry prior `text` with no steps
-      // yet. Seed the open run from it so the resumed delta continues the answer
-      // instead of replacing it.
-      if (steps.length === 0 && msg.text) {
-        steps.push({ kind: "text", text: msg.text });
-      }
-      const last = steps[steps.length - 1];
-      if (last && last.kind === "text") {
-        steps[steps.length - 1] = { kind: "text", text: last.text + delta };
-      } else {
-        steps.push({ kind: "text", text: delta });
-      }
+      const steps = appendTextStep(seededSteps(msg), "text", delta);
       return {
         ...state,
         message: { ...msg, steps, text: finalAnswer(steps) },
@@ -92,12 +110,17 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
     }
 
     case "response.reasoning_summary_text.delta": {
+      const delta = String(e.delta ?? "");
+      if (!delta) return state;
+      const steps = appendTextStep(seededSteps(msg), "reasoning", delta);
       return {
         ...state,
         message: {
           ...msg,
-          reasoning: msg.reasoning + String(e.delta ?? ""),
+          reasoning: msg.reasoning + delta,
           reasoningStatus: "streaming",
+          steps,
+          text: finalAnswer(steps),
         },
       };
     }
@@ -120,6 +143,7 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
       if (item?.type === "function_call") {
         const id = callIdOf(e);
         const existing = msg.toolCalls.find((t) => t.id === id);
+        const steps = appendToolStep(seededSteps(msg), id);
         if (existing) {
           return {
             ...state,
@@ -134,12 +158,13 @@ function reduceCore(state: StreamState, event: StreamEvent): StreamState {
                     }
                   : t
               ),
+              steps,
+              text: finalAnswer(steps),
             },
           };
         }
         // New tool call closes the open text run: prior prose was narration,
         // and the timeline records the tool at its true chronological position.
-        const steps: AssistantStep[] = [...(msg.steps ?? []), { kind: "tool", id }];
         return {
           ...state,
           message: {

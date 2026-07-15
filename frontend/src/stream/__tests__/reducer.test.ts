@@ -69,6 +69,10 @@ describe("reduceStreamEvent", () => {
     expect(s.message.reasoningStatus).toBe("done");
     expect(s.message.text).toBe("answer");
     expect(s.message.status).toBe("completed");
+    expect(s.message.steps).toEqual([
+      { kind: "reasoning", text: "think hard" },
+      { kind: "text", text: "answer" },
+    ]);
   });
 
   it("reasoning streaming status is set while deltas arrive", () => {
@@ -116,6 +120,7 @@ describe("reduceStreamEvent", () => {
     };
     const s = fold([ev, ev]);
     expect(s.message.toolCalls).toHaveLength(1);
+    expect(s.message.steps).toEqual([{ kind: "tool", id: "c1" }]);
   });
 
   it("reasoning_summary_text.done also flips reasoning to done", () => {
@@ -257,6 +262,41 @@ describe("reduceStreamEvent — narration vs final answer", () => {
     const s = fold([created("resp_n3", "c"), textDelta("hi "), textDelta("there")]);
     expect(s.message.text).toBe("hi there");
     expect(s.message.steps).toEqual([{ kind: "text", text: "hi there" }]);
+  });
+
+  it("interleaves reasoning, tools, later reasoning, and the final answer", () => {
+    const s = fold([
+      created("resp_n4", "c"),
+      reasoningDelta("先"),
+      reasoningDelta("分析"),
+      toolAdded("c1", "search"),
+      { type: "response.tool_result", call_id: "c1", output: "OK", ok: true },
+      reasoningDelta("检查结果"),
+      textDelta("最终答案"),
+    ]);
+
+    expect(s.message.reasoning).toBe("先分析检查结果");
+    expect(s.message.steps).toEqual([
+      { kind: "reasoning", text: "先分析" },
+      { kind: "tool", id: "c1" },
+      { kind: "reasoning", text: "检查结果" },
+      { kind: "text", text: "最终答案" },
+    ]);
+  });
+
+  it("seeds aggregate legacy content before appending resumed reasoning", () => {
+    const initial = initialStreamState("tmp");
+    initial.message.reasoning = "旧思考";
+    initial.message.text = "旧内容";
+    initial.message.steps = undefined;
+
+    const s = reduceStreamEvent(initial, reasoningDelta("新思考") as any);
+
+    expect(s.message.steps).toEqual([
+      { kind: "reasoning", text: "旧思考" },
+      { kind: "text", text: "旧内容" },
+      { kind: "reasoning", text: "新思考" },
+    ]);
   });
 });
 
