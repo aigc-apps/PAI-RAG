@@ -2,7 +2,7 @@ from __future__ import annotations
 import asyncio
 import time
 from datetime import datetime
-from typing import Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from loguru import logger
 
@@ -21,6 +21,7 @@ from agent.tools.registry import ToolRegistry
 from agent.tools.builtin.spawn_subagent import SPAWN_TOOL_NAMES
 from agent.tools.knowledge_bundle import KNOWLEDGE_TOOL_NAMES, normalize_knowledge_tool_lists
 from agent.tools.scope import ToolScope
+from app.agent_config import sandbox_template_for_agent
 from app.schemas import ResponsesRequest
 from app.store.base import Item, new_conversation_id
 from agent.soul import (
@@ -166,6 +167,7 @@ async def build_context(
     code_config = getattr(agent_profile, "code", None)
     code_enabled = bool(getattr(code_config, "enabled", False))
     code_manifest = getattr(code_config, "manifest", "") or ""
+    sandbox_template, code_writable = _resolve_agent_template(agent_config, agent_profile)
     # The agent's ``instructions`` markdown IS the persona (base system prompt);
     # blank falls back to the built-in DEFAULT_INSTRUCTIONS.
     instructions_md = (getattr(agent_profile, "instructions", "") or "").strip() or DEFAULT_INSTRUCTIONS
@@ -173,6 +175,7 @@ async def build_context(
         instructions_md, tool_names=tool_names, project_context=project_context,
         aliyun_pai_enabled=_aliyun_pai_enabled(),
         code_enabled=code_enabled, code_manifest=code_manifest,
+        code_writable=code_writable,
     )
 
     uid = authenticated_user_id or request.resolved_user_id
@@ -248,6 +251,9 @@ async def build_context(
         agent_rerank = getattr(agent_knowledge, "rerank", None)
         if agent_rerank is not None:
             metadata["knowledge_rerank"] = agent_rerank.model_dump()
+    # Per-agent sandbox template. Only the key — the provider resolves it (and any
+    # env_refs secrets) against its own settings at create time.
+    _apply_sandbox_template(metadata, sandbox_template)
     logger.debug(
         "agent knowledge tools resolved: agent_id={} tools={} kb_ids={} rerank_enabled={}",
         _agent_id(agent_config, agent_profile),
@@ -308,12 +314,14 @@ def build_subagent_context(
     effective_names = [t.name for t in toolbox.tools]
 
     code_config = getattr(profile, "code", None)
+    sandbox_template, code_writable = _resolve_agent_template(agent_config, profile)
     instructions_md = (getattr(profile, "instructions", "") or "").strip() or DEFAULT_INSTRUCTIONS
     system_prompt = render_subagent_system_prompt(
         instructions_md, tool_names=effective_names, project_context=project_context,
         aliyun_pai_enabled=_aliyun_pai_enabled(),
         code_enabled=bool(getattr(code_config, "enabled", False)),
         code_manifest=getattr(code_config, "manifest", "") or "",
+        code_writable=code_writable,
     )
 
     task_turn = Message(role="user", content=task)
@@ -349,6 +357,7 @@ def build_subagent_context(
         metadata["knowledge_rerank"] = rerank.model_dump()
     else:
         metadata.pop("knowledge_rerank", None)
+    _apply_sandbox_template(metadata, sandbox_template)
 
     return AgentContext(
         system_prompt=system_prompt,
@@ -376,6 +385,42 @@ def _capability_enabled(agent_config, cap_id: str) -> bool:
         if getattr(cap, "id", "") == cap_id:
             return getattr(cap, "permission", "") != "disabled"
     return False
+
+
+def _resolve_agent_template(agent_config, agent_profile) -> Tuple[str, bool]:
+    """Return (template key for the tool scope, code_writable for the prompt).
+
+    The key is the agent's own ``sandbox.template`` verbatim (blank included) —
+    it's passed through unresolved into ``metadata["sandbox_template"]`` so the
+    provider applies its own ``default_template`` at create time, and an unknown
+    key is rejected there with a message listing valid keys. Only the key travels
+    into the scope; ``env_refs`` are resolved inside the provider so secrets never
+    cross this layer.
+
+    ``code_writable`` is looked up eagerly (via ``app.agent_config.sandbox_template_for_agent``,
+    which resolves a blank key through ``default_template``) because the prompt is
+    rendered now, before any sandbox exists — so the wording matches the image the
+    agent will actually get. Anything unresolvable (unknown key, no provider, no
+    default) falls back to read-only: the conservative wording is wrong-but-harmless,
+    whereas a spurious "you may check out branches" against a root-owned /opt/code
+    is not.
+    """
+    if agent_config is None or agent_profile is None:
+        return "", False
+    key = str(getattr(getattr(agent_profile, "sandbox", None), "template", "") or "")
+    template = sandbox_template_for_agent(agent_config, agent_profile)
+    return key, bool(template.get("code_writable"))
+
+
+def _apply_sandbox_template(metadata: Dict[str, Any], sandbox_template: str) -> None:
+    """Set-or-pop the scope's template key. Never inherit: a subagent's metadata
+    starts as a copy of the parent's scope, so a child with no binding of its own
+    must clear the parent's key and fall back to the provider's default rather
+    than silently running on the parent's image."""
+    if sandbox_template:
+        metadata["sandbox_template"] = sandbox_template
+    else:
+        metadata.pop("sandbox_template", None)
 
 
 def _aliyun_pai_enabled() -> bool:
