@@ -83,6 +83,63 @@ describe("ConnectionsPanel", () => {
     });
   });
 
+  it("edits the environment-managed default provider with manual fallbacks", async () => {
+    const user = userEvent.setup();
+    const doc = docWith({
+      default_model: "openai/gpt-4o-mini",
+      providers: [
+        {
+          name: "openai",
+          type: "openai_compatible",
+          use_default_env: true,
+          base_url: "",
+          api_key: "",
+          env_base_url_configured: true,
+          env_api_key_configured: false,
+          manual_base_url_configured: false,
+          manual_api_key_configured: false,
+          models: [{ id: "gpt-4o-mini" }],
+        },
+      ],
+    });
+    render(<ConnectionsPanel doc={doc} />);
+
+    expect(screen.getByText("Environment default")).toBeInTheDocument();
+    expect(screen.getByText("OPENAI_BASE_URL · configured")).toBeInTheDocument();
+    expect(screen.getByText("OPENAI_API_KEY · not configured")).toBeInTheDocument();
+
+    await user.click(screen.getAllByRole("button", { name: "Edit" })[0]);
+    expect(screen.getByText(/Environment values take precedence/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Provider API key env")).not.toBeInTheDocument();
+    await user.type(
+      screen.getByLabelText("Manual base URL fallback"),
+      "https://manual.example/v1"
+    );
+    await user.type(screen.getByLabelText("Manual API key fallback"), "manual-secret");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).toHaveBeenCalledOnce();
+    const saved = save.mock.calls[0][0] as AgentConfigDocument;
+    expect(saved.models.providers?.[0]).toMatchObject({
+      name: "openai",
+      type: "openai_compatible",
+      use_default_env: true,
+      base_url: "https://manual.example/v1",
+      api_key: "manual-secret",
+    });
+    expect(saved.models.providers?.[0].api_key_env).toBeUndefined();
+  });
+
+  it("keeps custom provider environment-name controls", async () => {
+    const user = userEvent.setup();
+    render(<ConnectionsPanel doc={withProvider} />);
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    expect(screen.getByLabelText("Provider API key env")).toHaveValue("DASHSCOPE_API_KEY");
+    expect(screen.queryByLabelText("Manual API key fallback")).not.toBeInTheDocument();
+  });
+
   it("registers an embedding model as the default for its type", async () => {
     const user = userEvent.setup();
     render(<ConnectionsPanel doc={withProvider} />);

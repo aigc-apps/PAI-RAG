@@ -196,6 +196,9 @@ function ConnectionsSection({
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKeyEnv, setApiKeyEnv] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [environmentManaged, setEnvironmentManaged] = useState(false);
+  const [storedManualKey, setStoredManualKey] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   // Per-connection Test result keyed by provider name.
@@ -206,6 +209,9 @@ function ConnectionsSection({
     setName("");
     setBaseUrl("");
     setApiKeyEnv("");
+    setApiKey("");
+    setEnvironmentManaged(false);
+    setStoredManualKey(false);
     setEditing(null);
   };
 
@@ -224,6 +230,9 @@ function ConnectionsSection({
     setName(p.name);
     setBaseUrl(p.base_url ?? "");
     setApiKeyEnv(p.api_key_env ?? "");
+    setApiKey("");
+    setEnvironmentManaged(p.use_default_env === true);
+    setStoredManualKey(p.manual_api_key_configured === true || p.api_key === "********");
     setDialogOpen(true);
   };
 
@@ -237,10 +246,18 @@ function ConnectionsSection({
     // always matches an existing row; a new name always appends.
     const list = [...(cat.providers ?? [])];
     const idx = list.findIndex((p) => p.name === (editing ?? trimmed));
-    const patch = {
-      base_url: baseUrl.trim() || undefined,
-      api_key_env: apiKeyEnv.trim() || undefined,
-    };
+    const patch: Partial<ModelProviderDoc> = environmentManaged
+      ? {
+          type: "openai_compatible",
+          use_default_env: true,
+          base_url: baseUrl.trim() || undefined,
+          api_key_env: undefined,
+          ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
+        }
+      : {
+          base_url: baseUrl.trim() || undefined,
+          api_key_env: apiKeyEnv.trim() || undefined,
+        };
     if (idx >= 0) {
       list[idx] = { ...list[idx], ...patch };
     } else {
@@ -312,14 +329,37 @@ function ConnectionsSection({
           <tbody>
             {providers.map((p) => {
               const res = result[p.name];
+              const environmentDefault = p.use_default_env === true;
+              const urlSource = p.env_base_url_configured
+                ? `OPENAI_BASE_URL · ${t("conn.configured")}`
+                : p.manual_base_url_configured
+                  ? t("conn.manualFallback")
+                  : `OPENAI_BASE_URL · ${t("conn.notConfigured")}`;
+              const keySource = p.env_api_key_configured
+                ? `OPENAI_API_KEY · ${t("conn.configured")}`
+                : p.manual_api_key_configured
+                  ? t("conn.manualFallback")
+                  : `OPENAI_API_KEY · ${t("conn.notConfigured")}`;
               return (
                 <tr key={p.name} className="border-b border-[var(--border)] last:border-0">
-                  <td className="px-3 py-2 font-medium">{p.name}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
-                    {p.base_url || "—"}
+                  <td className="px-3 py-2 font-medium">
+                    <div>{p.name}</div>
+                    {environmentDefault && (
+                      <div className="mt-1 flex flex-wrap gap-1 text-[10px] font-medium">
+                        <span className="rounded bg-[var(--surface-2)] px-1.5 py-0.5 text-[var(--text-muted)]">
+                          {t("conn.openaiCompatible")}
+                        </span>
+                        <span className="rounded bg-[var(--accent-soft)] px-1.5 py-0.5 text-[var(--accent)]">
+                          {t("conn.environmentDefault")}
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
-                    {p.api_key_env || "—"}
+                    {environmentDefault ? urlSource : p.base_url || "—"}
+                  </td>
+                  <td className="px-3 py-2 font-mono text-xs text-[var(--text-muted)]">
+                    {environmentDefault ? keySource : p.api_key_env || "—"}
                   </td>
                   <td className="px-3 py-2 text-xs text-[var(--text-muted)]">
                     {(p.models ?? []).length}
@@ -406,26 +446,74 @@ function ConnectionsSection({
                 className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm outline-none focus:border-[var(--accent)] disabled:opacity-60"
               />
             </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colBaseUrl")}</span>
-              <input
-                aria-label={t("conn.providerBaseUrlAria")}
-                value={baseUrl}
-                placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
-                onChange={(e) => setBaseUrl(e.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colApiKeyEnv")}</span>
-              <input
-                aria-label={t("conn.providerApiKeyEnvAria")}
-                value={apiKeyEnv}
-                placeholder="DASHSCOPE_API_KEY"
-                onChange={(e) => setApiKeyEnv(e.target.value)}
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
-              />
-            </label>
+            {environmentManaged ? (
+              <>
+                <div className="rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--surface-2)] p-3 text-xs leading-5 text-[var(--text-muted)]">
+                  {t("conn.environmentPrecedence")}
+                  <div className="mt-2 grid gap-1 font-mono">
+                    <div>
+                      OPENAI_BASE_URL · {providers.find((p) => p.name === editing)?.env_base_url_configured
+                        ? t("conn.configured")
+                        : t("conn.notConfigured")}
+                    </div>
+                    <div>
+                      OPENAI_API_KEY · {providers.find((p) => p.name === editing)?.env_api_key_configured
+                        ? t("conn.configured")
+                        : t("conn.notConfigured")}
+                    </div>
+                  </div>
+                </div>
+                <label className="text-sm">
+                  <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                    {t("conn.manualBaseUrlFallback")}
+                  </span>
+                  <input
+                    aria-label={t("conn.manualBaseUrlFallback")}
+                    value={baseUrl}
+                    placeholder="https://api.openai.com/v1"
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">
+                    {t("conn.manualApiKeyFallback")}
+                  </span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    aria-label={t("conn.manualApiKeyFallback")}
+                    value={apiKey}
+                    placeholder={storedManualKey ? t("conn.manualKeyConfigured") : "sk-..."}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="text-sm">
+                  <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colBaseUrl")}</span>
+                  <input
+                    aria-label={t("conn.providerBaseUrlAria")}
+                    value={baseUrl}
+                    placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                    onChange={(e) => setBaseUrl(e.target.value)}
+                    className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+                <label className="text-sm">
+                  <span className="mb-1 block text-xs font-medium text-[var(--text-muted)]">{t("conn.colApiKeyEnv")}</span>
+                  <input
+                    aria-label={t("conn.providerApiKeyEnvAria")}
+                    value={apiKeyEnv}
+                    placeholder="DASHSCOPE_API_KEY"
+                    onChange={(e) => setApiKeyEnv(e.target.value)}
+                    className="w-full rounded-[var(--radius-sm)] border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-xs outline-none focus:border-[var(--accent)]"
+                  />
+                </label>
+              </>
+            )}
             <div className="mt-2 flex justify-end gap-2">
               <button
                 type="button"

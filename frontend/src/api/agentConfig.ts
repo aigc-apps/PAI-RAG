@@ -76,8 +76,15 @@ export interface ModelSpecDoc {
 
 export interface ModelProviderDoc {
   name: string;
+  type?: "openai_compatible";
+  use_default_env?: boolean;
   base_url?: string;
   api_key_env?: string;
+  api_key?: string;
+  env_base_url_configured?: boolean;
+  env_api_key_configured?: boolean;
+  manual_base_url_configured?: boolean;
+  manual_api_key_configured?: boolean;
   models?: ModelSpecDoc[];
   [k: string]: unknown;
 }
