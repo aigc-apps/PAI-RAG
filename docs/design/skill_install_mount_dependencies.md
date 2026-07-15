@@ -66,11 +66,34 @@ providers:
         user_server_addr: xxxx.nas.aliyuncs.com:/
         user_remote_path_template: /users/{user_id}
         user_read_only: false
-      # Read-only code layer at /opt/code is baked into the sandbox image, not
-      # NAS-mounted. Turn on when the template ships it (see below).
-      code_layer_enabled: true
       inject_env_contract: true
       extra_envs: {}
+      # Code layer at /opt/code is baked into the sandbox image, not NAS-mounted.
+      # Keyed by template so an agent can be bound to a different image/repo set;
+      # `code_writable` is an image fact (does this template's /opt/code exist as
+      # a writable git working copy, or a root-owned snapshot?), not a per-agent
+      # permission. See "Sandbox Image Contract" below.
+      templates:
+        pairec:
+          name: sandbox-code-feiyue
+        turbox:
+          name: sandbox-turbox-feiyue
+          code_writable: true
+          env_refs:
+            GITLAB_TOKEN: GITLAB_TOKEN
+      default_template: pairec
+```
+
+Agents bind to one template by key via `agents[].sandbox.template` (blank uses
+`default_template`):
+
+```yaml
+agents:
+  - id: main
+    code: { enabled: true, manifest: "..." }
+  - id: turbox-helper
+    sandbox: { template: turbox }
+    code: { enabled: true, manifest: "image-metadata / pai-wiki ..." }
 ```
 
 Agents choose from installed skills:
@@ -178,14 +201,18 @@ First implementation status:
 ## Sandbox Mounting
 
 Four runtime paths are contracted inside the sandbox. Three are NAS-mounted at
-create time; the code layer is baked into the image (optional — present only on a
-template that ships it, flagged by `code_layer_enabled`):
+create time; the code layer is baked into the image (present on every sandbox
+template today — `pairec` and `turbox` each ship one — so it is no longer
+gated by a provider-level flag; whether an *agent* is told about it is a
+separate, per-agent decision, see below):
 
 ```text
 /mnt/system   # agent-level shared, read-only; heavy deps baked into the sandbox image
 /mnt/skills   # agent-level shared, read-only skill packages
 /mnt/user     # per-user isolated, writable (outputs, memory)
-/opt/code     # agent-level shared, read-only source repos, BAKED into the image (optional; explore when the KB misses)
+/opt/code     # agent-level shared, source repos, BAKED into the image; writability is
+              # per-template (root-owned snapshot for pairec, git working copies owned
+              # by the runtime user for turbox — see templates[key].code_writable below)
 ```
 
 The active agent determines skill mounts:
@@ -206,11 +233,18 @@ Plus one per-user mount:
 /mnt/user  <- nas: <server>:/users/<user_id>  (read-write)
 ```
 
-The read-only code layer is **not** a NAS mount — it is a release-pinned source
-snapshot baked into the sandbox image at `/opt/code` (a single dir whose
-subdirectories are repositories; the agent discovers them by `ls /opt/code`).
-Baked rather than mounted because the workload is pure grep/read, where local
-disk beats NFS. It therefore contributes no `mountPoint`.
+The code layer is **not** a NAS mount — it is baked into the sandbox image at
+`/opt/code` (a single dir whose subdirectories are repositories; the agent
+discovers them by `ls /opt/code`). Baked rather than mounted because the
+workload is pure grep/read, where local disk beats NFS. It therefore
+contributes no `mountPoint`. What's baked differs per template: `pairec`
+extracts a release-pinned OSS tarball into a root-owned, world-readable
+snapshot; `turbox` `git clone`s two intranet repositories as working copies
+`chown`ed to the runtime user, so the agent can check out other branches
+(`--depth 1 --no-single-branch` fetches every branch tip offline; deepening
+history needs the sandbox's own network reach). Either way, changes made
+inside the sandbox land in the container's per-instance writable layer and are
+discarded when the sandbox ends — the baked image is never mutated.
 
 The remaining mount points share `userId/groupId = 1000` (the platform default
 for NAS mounts) at the `nasConfig` top level. `mountDir` values must not collide;
@@ -219,11 +253,18 @@ skill mounts are leaf dirs under `/mnt/skills/<id>` and the user mount is
 create payload to avoid provider validation errors.
 
 The env-var contract exposes each contracted path: `AGENT_SYSTEM_PATH`,
-`AGENT_SKILL_PATH`, `AGENT_USER_PATH`, and (only when `code_layer_enabled`)
-`AGENT_CODE_PATH=/opt/code`. Deployment side: build the sandbox image with
-`--build-arg PAIREC_CODE_ARCHIVE_URL=<archive.tar.gz>` (it downloads + extracts
-into `/opt/code` and bakes `AGENT_CODE_PATH`), then set `code_layer_enabled: true`
-on the matching template. To ship newer source, bump the archive URL and rebuild.
+`AGENT_SKILL_PATH`, `AGENT_USER_PATH`, and `AGENT_CODE_PATH=/opt/code` — all
+four are baked unconditionally into `sandbox/base/Dockerfile`, since every
+template ships a code layer today. What varies is whether the *agent* is
+told about it: `agents[].code.enabled` (plus an optional `code.manifest`)
+gates the code-layer guidance in the system prompt, and
+`agents[].sandbox.template` (resolved through
+`sandbox.default.settings.templates`) picks which image — and therefore
+which repositories and which `code_writable` — that agent actually gets. To
+ship newer pairec source, bump `pairec/Dockerfile`'s `CODE_ARCHIVE_URL`
+build-arg and rebuild; to change turbox's repositories, edit its
+`TURBOX_REPOS` build-arg. See `sandbox/README.md` for the full build and
+registration flow.
 
 Skill content lives on the NAS filesystem. `install_skill` writes packages to
 `skills.root`, which is deployed on the same NAS the sandbox mounts read-only —
@@ -253,10 +294,14 @@ the full contract.
 
 ## Sandbox Image Contract
 
-The sandbox image is an AgentRun template. The build recipe lives in this repo
-at `sandbox/` (`Dockerfile` + `agent-sandbox-bootstrap` + `README.md`); the
-image itself is built and registered in AgentRun outside the agent service. It
-must fulfill the runtime contract so the `AGENT_*` vars resolve:
+Each sandbox image is an AgentRun template. The build recipe lives in this
+repo at `sandbox/` — a shared `base/Dockerfile` (contract + toolchain,
+`agent-sandbox-bootstrap`) that `pairec/Dockerfile` and `turbox/Dockerfile`
+each build `FROM`, adding their own code layer and Aliyun plugins (see
+`sandbox/README.md` for the full layout and build steps). The images
+themselves are built and registered in AgentRun outside the agent service.
+Every template must fulfill the runtime contract so the `AGENT_*` vars
+resolve:
 
 ```dockerfile
 RUN mkdir -p /mnt/system /mnt/skills /mnt/user \

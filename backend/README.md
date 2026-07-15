@@ -34,10 +34,13 @@ export AGENTRUN_SANDBOX_API_KEY=...   # optional gateway auth token
 ```
 
 `sandbox.default.settings` supports a `templates` map of AgentRun sandbox images keyed
-by template key (each agent picks one via `AgentProfile.sandbox.template`), plus
-user/tenant/conversation isolation, idle timeout, execution timeout up to 30 seconds, cwd,
-OSS mounts for custom skills, and NAS mounts for user files; the agent sees this as the
-`code_interpreter` tool once the sandbox capability is enabled.
+by template key (each key an object with `name`, and optionally `code_writable` and
+`env_refs`), plus a `default_template` key used when an agent doesn't pick one. Each
+agent binds to a specific template via `AgentProfile.sandbox.template` (a key into
+`templates`; blank falls back to `default_template`). `sandbox.default.settings` also
+carries user/tenant/conversation isolation, idle timeout, execution timeout up to 30
+seconds, cwd, OSS mounts for custom skills, and NAS mounts for user files; the agent
+sees this as the `code_interpreter` tool once the sandbox capability is enabled.
 
 The default REST gateway contract follows the AgentRun sandbox shape:
 
