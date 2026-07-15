@@ -165,3 +165,46 @@ def test_validate_sandbox_bindings_ignores_unknown_template_key():
         manifest="",
     )
     validate_sandbox_bindings(doc)  # no raise
+
+
+def test_validate_sandbox_bindings_rejects_blank_default_template_when_agent_would_resolve_through_it():
+    # templates is non-empty, default_template is blank, and the agent's own
+    # sandbox.template is blank too -- it would resolve through
+    # default_template, which resolves to nothing. Every sandbox create for
+    # this agent fails even though the runtime status grading (templates
+    # non-empty) reports healthy.
+    doc = _doc_with_agent(
+        template_key="",
+        templates={"turbox": {"name": "turbox image", "code_writable": True}},
+        default_template="",
+        code_enabled=False,
+        manifest="",
+    )
+    with pytest.raises(ValueError, match="default_template"):
+        validate_sandbox_bindings(doc)
+
+
+def test_validate_sandbox_bindings_allows_blank_default_template_when_every_agent_is_explicitly_bound():
+    # Same blank default_template, but the only agent binds its own
+    # sandbox.template explicitly -- nothing ever resolves through the blank
+    # default, so it is not a live misconfiguration.
+    doc = _doc_with_agent(
+        template_key="turbox",
+        templates={"turbox": {"name": "turbox image", "code_writable": True}},
+        default_template="",
+        code_enabled=False,
+        manifest="",
+    )
+    validate_sandbox_bindings(doc)  # no raise
+
+
+def test_validate_sandbox_bindings_rejects_default_template_naming_absent_key():
+    doc = _doc_with_agent(
+        template_key="turbox",
+        templates={"turbox": {"name": "turbox image", "code_writable": True}},
+        default_template="does-not-exist",
+        code_enabled=False,
+        manifest="",
+    )
+    with pytest.raises(ValueError, match="does-not-exist"):
+        validate_sandbox_bindings(doc)

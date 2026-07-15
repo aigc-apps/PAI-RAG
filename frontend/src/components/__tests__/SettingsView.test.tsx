@@ -172,6 +172,10 @@ describe("SettingsView", () => {
     await user.type(screen.getByLabelText("Sandbox account ID env"), "ALIYUN_ACCOUNT_ID");
     await user.clear(screen.getByLabelText("Sandbox session idle seconds"));
     await user.type(screen.getByLabelText("Sandbox session idle seconds"), "900");
+    await user.selectOptions(
+      screen.getByLabelText("默认模板"),
+      screen.getByRole("option", { name: "default" })
+    );
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -221,6 +225,10 @@ describe("SettingsView", () => {
     await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
     // api_key_env + account_id_env are pre-filled in baseDoc, satisfying the
     // required trio (templates + api_key + account_id) without an endpoint.
+    await user.selectOptions(
+      screen.getByLabelText("默认模板"),
+      screen.getByRole("option", { name: "default" })
+    );
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -247,7 +255,7 @@ describe("SettingsView", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save).not.toHaveBeenCalled();
-    expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+    expect(screen.getByText("至少需要一个带名称的沙箱模板，并填写 API key 和 account id")).toBeInTheDocument();
   });
 
   it("blocks save when the templates map is empty", async () => {
@@ -266,7 +274,7 @@ describe("SettingsView", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save).not.toHaveBeenCalled();
-    expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+    expect(screen.getByText("至少需要一个带名称的沙箱模板，并填写 API key 和 account id")).toBeInTheDocument();
   });
 
   it("blocks save when a template entry has a blank name", async () => {
@@ -284,7 +292,7 @@ describe("SettingsView", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     expect(save).not.toHaveBeenCalled();
-    expect(screen.getByText("Template name, API key, and account id are required")).toBeInTheDocument();
+    expect(screen.getByText("至少需要一个带名称的沙箱模板，并填写 API key 和 account id")).toBeInTheDocument();
   });
 
   it("blocks save when a rename collides with an existing key", async () => {
@@ -339,6 +347,11 @@ describe("SettingsView", () => {
 
     expect(keyInput).toHaveFocus();
     expect(keyInput).toHaveValue("turbox");
+
+    await user.selectOptions(
+      screen.getByLabelText("默认模板"),
+      screen.getByRole("option", { name: "turbox" })
+    );
 
     await user.click(screen.getByRole("button", { name: "Save" }));
 
@@ -417,7 +430,7 @@ describe("SettingsView", () => {
     expect(provider?.settings.default_template).toBe("turbox");
   });
 
-  it("resets default_template to blank when its row is removed", async () => {
+  it("resets default_template to blank when its row is removed, and blocks save without reselecting one", async () => {
     const user = userEvent.setup();
     const save = vi.fn(async (doc: AgentConfigDocument) => doc);
     useAgentConfigStore.setState({ save });
@@ -448,12 +461,19 @@ describe("SettingsView", () => {
     await user.type(nameInputs[1], "second-template");
 
     await user.click(screen.getByRole("button", { name: "Remove template default" }));
+
+    // The default pointer (tracked by row id, not key string) resets to "no
+    // default" rather than being left dangling on the now-removed row.
+    expect(screen.getByLabelText("默认模板")).toHaveValue("");
+
+    // A blank default_template is itself now a save-blocking error (see
+    // missingDefaultTemplate): removing the default row must not silently
+    // produce a config where every agent that never bound its own
+    // sandbox.template fails every sandbox create.
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    expect(save).toHaveBeenCalledOnce();
-    const saved = save.mock.calls[0][0] as AgentConfigDocument;
-    const provider = saved.providers.find((item) => item.id === "sandbox.default");
-    expect(provider?.settings.default_template).toBe("");
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("请选择一个默认模板")).toBeInTheDocument();
   });
 
   it("keeps the tracked default when an accidental duplicate of its key is removed instead", async () => {
@@ -585,8 +605,31 @@ describe("SettingsView", () => {
     expect(save).not.toHaveBeenCalled();
     expect(screen.getByText("沙箱模板 key 不能为空")).toBeInTheDocument();
     expect(
-      screen.queryByText("Template name, API key, and account id are required")
+      screen.queryByText("至少需要一个带名称的沙箱模板，并填写 API key 和 account id")
     ).not.toBeInTheDocument();
+  });
+
+  it("blocks save when no default template is selected", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn(async (doc: AgentConfigDocument) => doc);
+    useAgentConfigStore.setState({ save });
+
+    render(<SettingsView doc={baseDoc} onBack={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "能力" }));
+    await user.click(screen.getByRole("button", { name: "Configure" }));
+
+    // Every other requirement is satisfied (name filled, api_key_env +
+    // account_id_env pre-filled in baseDoc, no dupes/blank keys) -- the only
+    // remaining problem is that the "默认模板" picker is still on its "—"
+    // placeholder option.
+    await user.type(screen.getByLabelText("Sandbox template name"), "code-template");
+    expect(screen.getByLabelText("默认模板")).toHaveValue("");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByText("请选择一个默认模板")).toBeInTheDocument();
   });
 
   it("binds an agent to a sandbox template by key", async () => {

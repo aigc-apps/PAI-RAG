@@ -731,6 +731,8 @@ export const zh: Record<keyof typeof en, string> = {
   "settings.sandbox.defaultTemplate": "默认模板",
   "settings.sandbox.duplicateTemplateKey": "沙箱模板 key 不能重复",
   "settings.sandbox.blankTemplateKey": "沙箱模板 key 不能为空",
+  "settings.sandbox.missingDefaultTemplate": "请选择一个默认模板",
+  "settings.sandbox.templateFieldsRequired": "至少需要一个带名称的沙箱模板，并填写 API key 和 account id",
   "settings.agent.sandboxTemplate": "沙箱模板",
   "settings.agent.sandboxTemplateDefault": "使用默认",
 };

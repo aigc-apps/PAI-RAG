@@ -2603,8 +2603,8 @@ function SandboxConfigDialog({
       return;
     }
     // A blank key gets its own message — it's a distinct, specific problem
-    // from the generic trio below, and "Template name, API key, and account
-    // id are required" doesn't mention it at all.
+    // from the generic checks below, and templateFieldsRequired doesn't
+    // mention it at all.
     if (rows.some((row) => !row.key.trim())) {
       setError(t("settings.sandbox.blankTemplateKey"));
       return;
@@ -2619,14 +2619,25 @@ function SandboxConfigDialog({
       (!apiKey.trim() && !apiKeyEnv.trim()) ||
       (!accountId.trim() && !accountIdEnv.trim())
     ) {
-      setError("Template name, API key, and account id are required");
+      setError(t("settings.sandbox.templateFieldsRequired"));
+      return;
+    }
+
+    const defaultTemplate = rows.find((row) => row.id === defaultRowId)?.key ?? "";
+    // A blank default_template degrades to `templates.get("") -> None ->
+    // raise` for every agent that never bound its own sandbox.template — a
+    // config that reports healthy/ready and only fails once an agent tries to
+    // actually use a sandbox (see validate_sandbox_bindings on the backend,
+    // which now rejects the same case). Requiring a selection here catches it
+    // at save time instead of at first sandbox create.
+    if (!defaultTemplate.trim()) {
+      setError(t("settings.sandbox.missingDefaultTemplate"));
       return;
     }
 
     const templates = Object.fromEntries(
       rows.map(({ id: _id, key, ...tpl }) => [key, tpl])
     );
-    const defaultTemplate = rows.find((row) => row.id === defaultRowId)?.key ?? "";
 
     const next: AgentConfigDocument = {
       ...doc,

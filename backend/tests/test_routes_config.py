@@ -398,6 +398,31 @@ def test_put_config_rejects_writable_template_with_blank_manifest(tmp_path, monk
     assert "main" in r.json()["detail"]
 
 
+def test_put_config_rejects_blank_default_template_when_an_agent_would_resolve_through_it(
+    tmp_path, monkeypatch
+):
+    # templates is non-empty but default_template is blank and the agent never
+    # bound its own sandbox.template -- it would resolve through the blank
+    # default_template, which resolves to nothing, so every sandbox create for
+    # that agent fails. This must be rejected at save time (see
+    # validate_sandbox_bindings) rather than shipping a config that reports
+    # healthy/ready and only fails once an agent actually tries to use a
+    # sandbox.
+    c = _client(tmp_path, monkeypatch)
+    doc = c.get("/v1/config").json()
+    sandbox_provider = next(p for p in doc["providers"] if p["id"] == "sandbox.default")
+    sandbox_provider["settings"]["templates"] = {
+        "pairec": {"name": "pairec image"},
+    }
+    sandbox_provider["settings"]["default_template"] = ""
+    doc["agents"][0]["sandbox"] = {"template": ""}
+
+    r = c.put("/v1/config", json=doc)
+
+    assert r.status_code == 400
+    assert "default_template" in r.json()["detail"]
+
+
 def test_agent_instructions_survive_save_load(tmp_path):
     from app.agent_config import load_agent_config, save_agent_config
 

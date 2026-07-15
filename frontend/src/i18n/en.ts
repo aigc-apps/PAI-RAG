@@ -746,6 +746,8 @@ export const en = {
   "settings.sandbox.defaultTemplate": "Default template",
   "settings.sandbox.duplicateTemplateKey": "Sandbox template keys must be unique",
   "settings.sandbox.blankTemplateKey": "Sandbox template keys cannot be blank",
+  "settings.sandbox.missingDefaultTemplate": "Select a default template",
+  "settings.sandbox.templateFieldsRequired": "At least one sandbox template with a name is required, along with an API key and account id",
   "settings.agent.sandboxTemplate": "Sandbox template",
   "settings.agent.sandboxTemplateDefault": "Use default",
 } satisfies Record<string, string>;

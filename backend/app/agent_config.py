@@ -872,7 +872,40 @@ def validate_sandbox_bindings(doc: AgentConfigDocument) -> None:
     sandbox provider's job to reject at create time (see
     ``sandbox_providers._resolve_template``), which has a better, provider-level
     error message. This function only enforces the manifest rule.
+
+    It DOES, however, validate ``settings.default_template`` itself (below):
+    that one is provider-level, not per-agent, so nothing else ever checks it.
+    A blank or dangling ``default_template`` degrades to
+    ``templates.get("") -> None -> raise`` for every agent that never set an
+    explicit ``sandbox.template`` — a config that looks ``healthy``/``ready``
+    in the runtime status grading (which only checks ``templates`` is
+    non-empty) but fails every single sandbox create. Catching it here, at
+    save time, turns a first-run surprise into an immediate, actionable 400.
     """
+    settings = sandbox_template_settings(doc)
+    templates = settings.get("templates")
+    templates = templates if isinstance(templates, dict) else {}
+    if templates:
+        default_template = str(settings.get("default_template") or "").strip()
+        if default_template and default_template not in templates:
+            raise ValueError(
+                f"sandbox default_template {default_template!r} is not a key in "
+                f"settings.templates; known templates: {sorted(templates)}. Set "
+                "default_template to one of those keys."
+            )
+        if not default_template:
+            blank_agent_ids = [
+                agent.id for agent in doc.agents if not (agent.sandbox.template or "").strip()
+            ]
+            if blank_agent_ids:
+                raise ValueError(
+                    "sandbox settings.default_template is blank but agent(s) "
+                    f"{blank_agent_ids} have no sandbox.template bound and would "
+                    f"resolve through it; set default_template to one of "
+                    f"{sorted(templates)}, or bind sandbox.template explicitly on "
+                    "those agents"
+                )
+
     for agent in doc.agents:
         if not agent.code.enabled:
             continue
