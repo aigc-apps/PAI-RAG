@@ -828,6 +828,65 @@ def _merge_discovered_skills(doc: AgentConfigDocument) -> None:
             current.dependencies = deps or current.dependencies
 
 
+def sandbox_template_settings(doc: AgentConfigDocument) -> Dict[str, Any]:
+    """The ``sandbox.default`` provider's settings block, or ``{}``."""
+    provider = next((p for p in doc.providers if p.id == "sandbox.default"), None)
+    if provider is None:
+        return {}
+    return provider.settings or {}
+
+
+def sandbox_template_for_agent(doc: AgentConfigDocument, agent_profile: "AgentProfile") -> Dict[str, Any]:
+    """The template settings bound to this agent (resolving a blank
+    ``agent_profile.sandbox.template`` through ``default_template``), or ``{}``
+    when unresolvable (unknown key, or no default configured)."""
+    settings = sandbox_template_settings(doc)
+    templates = settings.get("templates")
+    if not isinstance(templates, dict):
+        return {}
+    key = (agent_profile.sandbox.template or "").strip() or str(settings.get("default_template") or "")
+    if not key:
+        return {}
+    template = templates.get(key)
+    return template if isinstance(template, dict) else {}
+
+
+def validate_sandbox_bindings(doc: AgentConfigDocument) -> None:
+    """Raise ``ValueError`` when an agent bound to a ``code_writable`` sandbox
+    template has ``code.enabled`` but a blank ``code.manifest``.
+
+    Why this must be rejected rather than merely warned about: when the manifest
+    is blank, ``soul._code_layer_block`` returns the hardcoded
+    ``_CODE_LAYER_GUIDANCE`` early, *before* it ever looks at ``code_writable``.
+    That constant unconditionally says "it is read-only reference material — do
+    not try to modify it." On a ``code_writable`` template, ``/opt/code`` is a
+    checkoutable git working copy, so the agent would be told not to touch a
+    directory it is meant to check out — exactly the self-contradiction this
+    ``code_writable`` branching was introduced to eliminate. Requiring a
+    manifest whenever ``code_writable`` + ``code.enabled`` are both true makes
+    that combination structurally unreachable instead of relying on every
+    caller of ``soul.py`` to remember the interaction.
+
+    Deliberately does NOT validate that ``agent_profile.sandbox.template``
+    resolves to a *known* template key — an unresolvable/unknown key is the
+    sandbox provider's job to reject at create time (see
+    ``sandbox_providers._resolve_template``), which has a better, provider-level
+    error message. This function only enforces the manifest rule.
+    """
+    for agent in doc.agents:
+        if not agent.code.enabled:
+            continue
+        if (agent.code.manifest or "").strip():
+            continue
+        template = sandbox_template_for_agent(doc, agent)
+        if template.get("code_writable"):
+            raise ValueError(
+                f"agent '{agent.id}' is bound to a code_writable sandbox template "
+                "with code.enabled but no code.manifest; set code.manifest before "
+                "enabling code access on a writable template"
+            )
+
+
 def set_agent_skill_enabled(
     doc: AgentConfigDocument,
     *,

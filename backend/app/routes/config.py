@@ -25,6 +25,7 @@ from app.agent_config import (
     remove_installed_skill,
     save_agent_config,
     set_agent_skill_enabled,
+    validate_sandbox_bindings,
 )
 from app.auth import require_admin
 from app.config import get_settings
@@ -107,6 +108,10 @@ async def _save_and_reload(
         ProviderRouter(catalog)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"invalid models config: {exc}") from exc
+    try:
+        validate_sandbox_bindings(doc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if getattr(state, "config_store", None) is not None:
         stored = await state.config_store.save(doc, updated_by=updated_by)
         doc = stored.doc

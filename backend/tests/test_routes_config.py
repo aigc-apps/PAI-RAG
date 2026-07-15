@@ -378,6 +378,26 @@ def test_agent_code_config_survives_save_load(tmp_path):
     assert reloaded.agents[0].code.manifest == "- repo-a — the API server"
 
 
+def test_put_config_rejects_writable_template_with_blank_manifest(tmp_path, monkeypatch):
+    # An agent bound to a code_writable sandbox template with code.enabled but no
+    # code.manifest must be rejected at save time (see validate_sandbox_bindings) —
+    # otherwise it falls through to soul.py's hardcoded read-only guidance while
+    # its actual /opt/code is a checkoutable git working copy.
+    c = _client(tmp_path, monkeypatch)
+    doc = c.get("/v1/config").json()
+    sandbox_provider = next(p for p in doc["providers"] if p["id"] == "sandbox.default")
+    sandbox_provider["settings"]["templates"] = {
+        "turbox": {"name": "turbox image", "code_writable": True},
+    }
+    doc["agents"][0]["sandbox"] = {"template": "turbox"}
+    doc["agents"][0]["code"] = {"enabled": True, "manifest": ""}
+
+    r = c.put("/v1/config", json=doc)
+
+    assert r.status_code == 400
+    assert "main" in r.json()["detail"]
+
+
 def test_agent_instructions_survive_save_load(tmp_path):
     from app.agent_config import load_agent_config, save_agent_config
 
