@@ -41,6 +41,14 @@ USER root
 # for. Copy the secret to a writable path first and point the helper there
 # instead; the copy must not survive this RUN (one layer, created and
 # deleted in the same instruction) or it would ship inside the image.
+#
+# Every step below is `;`-separated, NOT `&&`-joined. `set -eu` is suppressed
+# inside any command of an AND-OR list except the last, and that suppression
+# reaches into a loop body -- so `done && rm ...` would let a failed clone pass
+# silently and the RUN would exit 0 with a repository missing from /opt/code,
+# printing a green "cloned code layer:" on the way out. With `;` a failed clone
+# aborts the build. (A failed RUN commits no layer, so skipping the `rm` on that
+# path leaks nothing.)
 RUN --mount=type=secret,id=gitcred,target=/root/.git-credentials \
     set -eu; \
     cp /root/.git-credentials /root/.git-credentials.rw; \
@@ -48,11 +56,11 @@ RUN --mount=type=secret,id=gitcred,target=/root/.git-credentials \
       url="${spec%@*}"; ref="${spec##*@}"; name="$(basename "$url" .git)"; \
       git -c credential.helper='store --file=/root/.git-credentials.rw' \
           clone --depth 1 --no-single-branch -b "$ref" "$url" "/opt/code/$name"; \
-    done \
- && rm -f /root/.git-credentials.rw \
- && git config --system credential."http://gitlab.alibaba-inc.com".helper env \
- && chown -R 1000:1000 /opt/code \
- && echo "cloned code layer:" && ls -1 /opt/code
+    done; \
+    rm -f /root/.git-credentials.rw; \
+    git config --system credential."http://gitlab.alibaba-inc.com".helper env; \
+    chown -R 1000:1000 /opt/code; \
+    echo "cloned code layer:"; ls -1 /opt/code
 
 USER 1000
 RUN aliyun plugin install --names aliyun-cli-pai-dsw && aliyun plugin list
