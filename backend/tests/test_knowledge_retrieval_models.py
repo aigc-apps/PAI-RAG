@@ -16,6 +16,7 @@ from contextlib import contextmanager
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+import httpx
 from loguru import logger
 
 import app.knowledge as knowledge_module
@@ -675,12 +676,108 @@ def test_missing_trace_extension_does_not_change_search_results(monkeypatch):
     assert total == 1
 
 
-def test_query_embedding_fallback_redacts_exception_message(monkeypatch):
-    sentinel = "SENSITIVE_EMBED_QUERY_787e"
+def test_query_embedding_fallback_logs_http_service_details_and_redacts_api_key():
+    query = "diagnose this"
+    api_key = "sk-sensitive-embedding-key"
 
     class FailingEmbedder:
+        def __init__(self):
+            self.model = "embed-v1"
+            self.url = (
+                f"https://embed.example/v1/embeddings?region=cn&token={api_key}"
+            )
+            self.api_key = api_key
+            self.dimension = 8
+
         async def embed(self, texts, *, text_type="document"):
-            raise RuntimeError(f"embedding payload={texts[0]}")
+            request = httpx.Request("POST", self.url)
+            response = httpx.Response(
+                400,
+                request=request,
+                text=f'{{"error":"invalid model","key":"{api_key}"}}',
+            )
+            raise httpx.HTTPStatusError(
+                f"bad embedding key={api_key}", request=request, response=response
+            )
+
+    async def scenario():
+        cat = ModelCatalog(
+            default_model="vendor/chat",
+            providers=[
+                ProviderConfig(
+                    name="vendor",
+                    base_url="https://embed.example/v1",
+                    api_key=api_key,
+                    models=[
+                        ModelSpec(id="chat"),
+                        ModelSpec(id="embed-v1", type="embedding", dimension=8),
+                    ],
+                )
+            ],
+        )
+        router = ProviderRouter(cat)
+        router.register_llm("vendor/embed-v1", FakeEmbedder(dimension=8))
+        svc = await _svc(router)
+        kb = await svc.create_kb(
+            user=ADMIN,
+            name="KB",
+            visibility="public",
+            embedding_config={
+                "provider_id": "vendor",
+                "model": "vendor/embed-v1",
+                "dimension": 8,
+            },
+        )
+        await svc.import_text_document(
+            kb.id, user=ADMIN, title="d", content="safe searchable content", uri="d/1"
+        )
+        router.register_llm("vendor/embed-v1", FailingEmbedder())
+        messages: list[str] = []
+        sink = logger.add(messages.append, format="{message}")
+        try:
+            hits, _ = await svc.search(
+                user=ADMIN, kb_ids=[kb.id], query=query, mode="hybrid"
+            )
+        finally:
+            logger.remove(sink)
+        return hits, messages
+
+    hits, messages = asyncio.run(scenario())
+    assert hits and hits[0].text == "safe searchable content"
+    message = next(message for message in messages if "operation=query_embedding" in message)
+    assert "provider=vendor" in message
+    assert "model=vendor/embed-v1" in message
+    assert "dimension=8" in message
+    assert (
+        "service_url=https://embed.example/v1/embeddings?region=cn&token=***REDACTED***"
+        in message
+    )
+    assert "error_type=HTTPStatusError" in message
+    assert "error=bad embedding key=***REDACTED***" in message
+    assert "http_method=POST" in message
+    assert (
+        "request_url=https://embed.example/v1/embeddings?region=cn&token=***REDACTED***"
+        in message
+    )
+    assert "http_status=400" in message
+    assert 'response_body={"error":"invalid model","key":"***REDACTED***"}' in message
+    assert f"query={query}" in message
+    assert "fallback=search_engine" in message
+    assert api_key not in message
+    assert "Authorization" not in message
+
+
+def test_query_embedding_fallback_logs_non_http_error_context(monkeypatch):
+    query = "show runtime detail"
+
+    class FailingEmbedder:
+        model = "embed-v2"
+        base_url = "https://embed.example/native"
+        api_key = "safe-key"
+        dimension = 8
+
+        async def embed(self, texts, *, text_type="document"):
+            raise RuntimeError(f"vector shape mismatch query={texts[0]}")
 
     async def scenario():
         svc = await _svc()
@@ -695,7 +792,7 @@ def test_query_embedding_fallback_redacts_exception_message(monkeypatch):
         sink = logger.add(messages.append, format="{message}")
         try:
             hits, _ = await svc.search(
-                user=ADMIN, kb_ids=[kb.id], query=sentinel, mode="hybrid"
+                user=ADMIN, kb_ids=[kb.id], query=query, mode="hybrid"
             )
         finally:
             logger.remove(sink)
@@ -703,11 +800,15 @@ def test_query_embedding_fallback_redacts_exception_message(monkeypatch):
 
     hits, messages = asyncio.run(scenario())
     assert hits and hits[0].text == "safe searchable content"
-    assert all(sentinel not in message for message in messages)
-    assert any(
-        "operation=query_embedding" in message and "error_type=RuntimeError" in message
-        for message in messages
-    )
+    message = next(message for message in messages if "operation=query_embedding" in message)
+    assert "provider=local_hash" in message
+    assert "model=local-hash-v1" in message
+    assert "dimension=64" in message
+    assert "service_url=https://embed.example/native" in message
+    assert "error_type=RuntimeError" in message
+    assert f"error=vector shape mismatch query={query}" in message
+    assert f"query={query}" in message
+    assert "fallback=search_engine" in message
 
 
 def test_primary_search_fallback_redacts_exception_message():

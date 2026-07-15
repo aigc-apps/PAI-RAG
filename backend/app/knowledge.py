@@ -7,6 +7,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
+import httpx
 from loguru import logger
 from sqlalchemy import String, cast, delete, func
 from sqlalchemy.orm.attributes import flag_modified
@@ -69,6 +70,87 @@ DEFAULT_RETRIEVAL_CONFIG = {
     "score_threshold": 0.0,
     "force_citation": True,
 }
+
+
+def _redact_api_key(value: object, api_key: str) -> str:
+    text = str(value)
+    if api_key:
+        return text.replace(api_key, "***REDACTED***")
+    return text
+
+
+def _query_embedding_error_context(
+    *,
+    provider: str,
+    model: str,
+    dimension: int,
+    query: str,
+    embedder,
+    router,
+    error: Exception,
+) -> dict[str, str]:
+    """Build best-effort query-embedding diagnostics without exposing the key."""
+    api_key = str(getattr(embedder, "api_key", "") or "")
+    service_url = str(
+        getattr(embedder, "url", "")
+        or getattr(embedder, "base_url", "")
+        or ""
+    )
+
+    if router is not None and model and (not api_key or not service_url):
+        try:
+            config = router.get_config(model)
+            if not api_key:
+                api_key = config.resolve_key()
+            if not service_url:
+                service_url = config.resolve_base_url()
+                if config.type == "embedding" and config.protocol == "openai":
+                    service_url = service_url.rstrip("/") + "/embeddings"
+        except Exception:
+            # Diagnostics must never replace the original fallback path.
+            pass
+
+    fields: dict[str, object] = {
+        "operation": "query_embedding",
+        "provider": provider or "unknown",
+        "model": model or "unknown",
+        "dimension": dimension,
+        "service_url": service_url or "unknown",
+        "error_type": type(error).__name__,
+        "error": str(error),
+        "query": query,
+    }
+    if isinstance(error, httpx.HTTPStatusError):
+        try:
+            fields["http_method"] = error.request.method
+            fields["request_url"] = str(error.request.url)
+        except Exception:
+            pass
+        try:
+            fields["http_status"] = error.response.status_code
+            fields["response_body"] = error.response.text
+        except Exception:
+            pass
+    fields["fallback"] = "search_engine"
+    return {
+        key: _redact_api_key(value, api_key)
+        for key, value in fields.items()
+    }
+
+
+def _log_query_embedding_error(**kwargs) -> None:
+    try:
+        context = _query_embedding_error_context(**kwargs)
+        logger.warning(" ".join(f"{key}={value}" for key, value in context.items()))
+    except Exception as logging_error:
+        # Preserve a minimal warning even if an unusual exception object cannot
+        # be rendered; never interrupt the existing retrieval fallback.
+        logger.warning(
+            "operation=query_embedding error_type={} logging_error_type={} "
+            "fallback=search_engine",
+            type(kwargs.get("error")).__name__,
+            type(logging_error).__name__,
+        )
 
 
 _TOKEN_RE = re.compile(r"[\w\u4e00-\u9fff]+", re.UNICODE)
@@ -1081,6 +1163,7 @@ class KnowledgeService:
                             "knowledge.kb_count": len(group),
                         },
                     ) as embedding_span:
+                        embedder = None
                         try:
                             embedder = build_embedder(
                                 group[0].embedding_config, self._router
@@ -1092,10 +1175,14 @@ class KnowledgeService:
                             )
                         except Exception as ex:
                             mark_span_error(embedding_span, ex)
-                            logger.warning(
-                                "operation=query_embedding error_type={} "
-                                "fallback=search_engine",
-                                type(ex).__name__,
+                            _log_query_embedding_error(
+                                provider=provider,
+                                model=model,
+                                dimension=dimension,
+                                query=query,
+                                embedder=embedder,
+                                router=self._router,
+                                error=ex,
                             )
                 for kb in group:
                     kwargs = dict(
