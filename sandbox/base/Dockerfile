@@ -61,7 +61,8 @@ RUN printf '%s\n' \
       > /usr/local/bin/git-credential-env \
  && chmod 0755 /usr/local/bin/git-credential-env
 
-# Startup validation: fails fast if a contract mount is missing/unreadable.
+# Startup validation: fails fast if a contract mount is missing/unreadable, so
+# a mis-mounted sandbox surfaces a clear error instead of a confusing 404 later.
 COPY agent-sandbox-bootstrap /usr/local/bin/agent-sandbox-bootstrap
 RUN chmod +x /usr/local/bin/agent-sandbox-bootstrap
 
@@ -84,9 +85,12 @@ ENV SANDBOX_BASE_ENTRYPOINT=/usr/local/bin/entrypoint.sh \
 
 USER 1000
 
-# FC uses the image ENTRYPOINT as the start command and CMD as its args. Setting
-# ENTRYPOINT clears the CMD inherited from the base image, so the base startup
-# chain is restored explicitly; keep CMD's first arg as "process-compose" so
-# entrypoint.sh takes its config-injection branch.
+# FC uses the image ENTRYPOINT as the start command and CMD as its args.
+# Setting ENTRYPOINT cleared the CMD inherited from the base image (which is
+# how we ended up with CMD=null and the instance exiting 0 — FC reports that
+# as "Function instance exited unexpectedly", with nothing pointing at the
+# ENTRYPOINT override as the cause), so restore the base startup chain
+# explicitly; keep CMD's first arg as "process-compose" so entrypoint.sh
+# takes its config-injection branch.
 ENTRYPOINT ["agent-sandbox-bootstrap"]
 CMD ["/usr/local/bin/entrypoint.sh", "process-compose", "up", "--tui=false", "--no-server"]
