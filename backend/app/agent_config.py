@@ -551,6 +551,19 @@ def authored_config_dict(doc: AgentConfigDocument) -> Dict[str, Any]:
         providers.append(item)
     data["providers"] = providers
 
+    model_providers = data.get("models", {}).get("providers", [])
+    if isinstance(model_providers, list):
+        for provider in model_providers:
+            if not isinstance(provider, dict):
+                continue
+            for key in (
+                "env_base_url_configured",
+                "env_api_key_configured",
+                "manual_base_url_configured",
+                "manual_api_key_configured",
+            ):
+                provider.pop(key, None)
+
     capabilities = []
     for cap in data.get("capabilities", []) or []:
         if cap.get("id") == "aliyun_pai" or cap.get("kind") == "skill":
@@ -589,6 +602,9 @@ def _setting_configured(settings_dict: Dict[str, Any], direct_key: str, env_key:
 
 def mask_secrets(doc: AgentConfigDocument) -> AgentConfigDocument:
     out = doc.model_copy(deep=True)
+    for provider in out.models.get("providers", []) or []:
+        if isinstance(provider, dict) and provider.get("api_key"):
+            provider["api_key"] = "********"
     for provider in out.providers:
         for key in ("api_key", "access_key_id", "access_key_secret", "security_token"):
             if provider.settings.get(key):
@@ -604,6 +620,21 @@ def mask_secrets(doc: AgentConfigDocument) -> AgentConfigDocument:
 def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentConfigDocument:
     out = doc.model_copy(deep=True)
     _merge_discovered_skills(out)
+    for provider in out.models.get("providers", []) or []:
+        if not isinstance(provider, dict) or not provider.get("use_default_env"):
+            continue
+        provider["env_base_url_configured"] = bool(
+            os.environ.get("OPENAI_BASE_URL", "").strip()
+        )
+        provider["env_api_key_configured"] = bool(
+            os.environ.get("OPENAI_API_KEY", "").strip()
+        )
+        provider["manual_base_url_configured"] = bool(
+            str(provider.get("base_url") or "").strip()
+        )
+        provider["manual_api_key_configured"] = bool(
+            str(provider.get("api_key") or "").strip()
+        )
     providers = {p.id: p for p in out.providers}
     caps = {c.id: c for c in out.capabilities}
 
@@ -619,12 +650,18 @@ def apply_runtime_status(doc: AgentConfigDocument, settings, router) -> AgentCon
         if router is not None and router.default_model_id:
             try:
                 cfg = router.get_config(router.default_model_id)
-                model_ready = bool(cfg.resolve_key() or not cfg.api_key_env)
+                if cfg.use_default_env:
+                    model_ready = bool(cfg.resolve_base_url() and cfg.resolve_key())
+                else:
+                    model_ready = bool(cfg.resolve_key() or not cfg.api_key_env)
                 llm.settings.update({
                     "default_model": router.default_model_id,
                     "provider": cfg.provider,
-                    "base_url": cfg.base_url,
                 })
+                if not cfg.use_default_env:
+                    llm.settings["base_url"] = cfg.base_url
+                else:
+                    llm.settings.pop("base_url", None)
                 llm.secret_configured = bool(cfg.resolve_key())
             except Exception as exc:
                 llm.error = str(exc)

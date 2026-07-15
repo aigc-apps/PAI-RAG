@@ -129,6 +129,20 @@ async def _save_and_reload(
 
 
 def _preserve_masked_secrets(doc: AgentConfigDocument, current: AgentConfigDocument) -> None:
+    current_model_providers = {
+        provider.get("name"): provider
+        for provider in current.models.get("providers", []) or []
+        if isinstance(provider, dict) and provider.get("name")
+    }
+    for provider in doc.models.get("providers", []) or []:
+        if not isinstance(provider, dict) or provider.get("api_key") != "********":
+            continue
+        existing_model_provider = current_model_providers.get(provider.get("name"))
+        if existing_model_provider and existing_model_provider.get("api_key"):
+            provider["api_key"] = existing_model_provider["api_key"]
+        else:
+            provider.pop("api_key", None)
+
     current_by_id = {provider.id: provider for provider in current.providers}
     for provider in doc.providers:
         existing = current_by_id.get(provider.id)

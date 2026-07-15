@@ -19,6 +19,7 @@ from app.agent_config import (
     apply_runtime_status,
     authored_config_dict,
     load_agent_config,
+    mask_secrets,
     save_agent_config,
 )
 from agent.tools.knowledge_bundle import (
@@ -452,6 +453,88 @@ def test_vectordb_secret_roundtrip_masked_and_preserved(tmp_path, monkeypatch):
     vdb2 = c.put("/v1/config", json=saved).json()["knowledgebase"]["vectordb"]
     assert vdb2["status"] == "healthy"
     assert vdb2["secret_configured"] is True
+
+
+def test_default_model_provider_runtime_status_and_masking(monkeypatch):
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://env-secret.example/v1")
+    monkeypatch.setenv("OPENAI_API_KEY", "env-secret-key")
+    doc = _merge_default({})
+    provider = doc.models["providers"][0]
+    provider["base_url"] = "https://manual.example/v1"
+    provider["api_key"] = "manual-secret"
+
+    runtime = apply_runtime_status(
+        doc,
+        type(
+            "Settings",
+            (),
+            {
+                "openai_api_key": "",
+                "default_model": "openai/gpt-4o-mini",
+                "search_provider": "none",
+                "search_api_key": "",
+                "search_endpoint": "",
+            },
+        )(),
+        None,
+    )
+    masked = mask_secrets(runtime)
+    output = masked.model_dump(mode="json")
+    model_provider = output["models"]["providers"][0]
+
+    assert model_provider["api_key"] == "********"
+    assert model_provider["env_base_url_configured"] is True
+    assert model_provider["env_api_key_configured"] is True
+    assert model_provider["manual_base_url_configured"] is True
+    assert model_provider["manual_api_key_configured"] is True
+    serialized = str(output)
+    assert "https://env-secret.example/v1" not in serialized
+    assert "env-secret-key" not in serialized
+    authored_provider = authored_config_dict(masked)["models"]["providers"][0]
+    assert "env_base_url_configured" not in authored_provider
+    assert "env_api_key_configured" not in authored_provider
+
+
+def test_default_model_provider_manual_key_is_preserved_from_mask(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    c = _client(tmp_path, monkeypatch)
+    doc = c.get("/v1/config").json()
+    provider = doc["models"]["providers"][0]
+    provider["base_url"] = "https://manual.example/v1"
+    provider["api_key"] = "manual-secret"
+
+    saved = c.put("/v1/config", json=doc)
+
+    assert saved.status_code == 200
+    saved_doc = saved.json()
+    saved_provider = saved_doc["models"]["providers"][0]
+    assert saved_provider["api_key"] == "********"
+    assert saved_provider["manual_api_key_configured"] is True
+
+    resaved = c.put("/v1/config", json=saved_doc)
+
+    assert resaved.status_code == 200
+    persisted = load_agent_config(str(tmp_path / "config.yaml"))
+    assert persisted.models["providers"][0]["api_key"] == "manual-secret"
+
+
+def test_default_model_provider_manual_key_can_be_replaced(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    c = _client(tmp_path, monkeypatch)
+    doc = c.get("/v1/config").json()
+    provider = doc["models"]["providers"][0]
+    provider["base_url"] = "https://manual.example/v1"
+    provider["api_key"] = "first-secret"
+    saved = c.put("/v1/config", json=doc).json()
+    saved["models"]["providers"][0]["api_key"] = "replacement-secret"
+
+    replaced = c.put("/v1/config", json=saved)
+
+    assert replaced.status_code == 200
+    persisted = load_agent_config(str(tmp_path / "config.yaml"))
+    assert persisted.models["providers"][0]["api_key"] == "replacement-secret"
 
 
 def test_default_instructions_survives_put_config(tmp_path, monkeypatch):
