@@ -1,7 +1,9 @@
-import sys, os, asyncio
+import asyncio
+import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from agent.core.events import (
+from agent.core.events import (  # noqa: E402
     RunStarted,
     TextDelta,
     ReasoningDelta,
@@ -12,8 +14,8 @@ from agent.core.events import (
     RunFailed,
     Usage,
 )
-from api.protocol.responses_serializer import serialize_response_sync
-from openai.types.responses import Response
+from api.protocol.responses_serializer import serialize_response_sync  # noqa: E402
+from openai.types.responses import Response  # noqa: E402
 
 
 async def _events(seq):
@@ -144,4 +146,63 @@ def test_sync_tool_result_error_stores_error_text():
                                                     conversation_id=None)
         out = next(it for it in items if it["type"] == "function_call_output")
         assert out["content"]["output"] == "exploded"
+    asyncio.run(run())
+
+
+def test_sync_persists_reasoning_content_and_tools_in_execution_order():
+    async def run():
+        events = _events([
+            RunStarted(response_id="resp_timeline"),
+            ReasoningDelta(text="先"),
+            ReasoningDelta(text="分析"),
+            TextDelta(text="准备调用"),
+            ToolStarted(call_id="c1", name="get"),
+            ToolCompleted(call_id="c1", name="get", arguments="{}"),
+            ToolResult(call_id="c1", name="get", ok=True, output="42"),
+            ReasoningDelta(text="检查"),
+            ReasoningDelta(text="结果"),
+            TextDelta(text="最终答案"),
+            RunCompleted(usage=Usage(input=1, output=1, total=2)),
+        ])
+        _, items = await serialize_response_sync(
+            events,
+            model="m",
+            response_id="resp_timeline",
+            conversation_id=None,
+        )
+        message = next(
+            item
+            for item in items
+            if item["type"] == "message" and item["role"] == "assistant"
+        )
+        assert message["content"]["timeline"] == [
+            {"kind": "reasoning", "text": "先分析"},
+            {"kind": "text", "text": "准备调用"},
+            {"kind": "tool", "id": "c1"},
+            {"kind": "reasoning", "text": "检查结果"},
+            {"kind": "text", "text": "最终答案"},
+        ]
+
+    asyncio.run(run())
+
+
+def test_sync_tool_completion_without_start_still_persists_one_timeline_step():
+    async def run():
+        events = _events([
+            RunStarted(response_id="resp_tool_fallback"),
+            ToolCompleted(call_id="c1", name="get", arguments="{}"),
+            ToolCompleted(call_id="c1", name="get", arguments="{}"),
+            RunCompleted(usage=Usage(input=1, output=1, total=2)),
+        ])
+        _, items = await serialize_response_sync(
+            events,
+            model="m",
+            response_id="resp_tool_fallback",
+            conversation_id=None,
+        )
+        message = next(item for item in items if item["type"] == "message")
+        assert message["content"]["timeline"] == [
+            {"kind": "tool", "id": "c1"}
+        ]
+
     asyncio.run(run())

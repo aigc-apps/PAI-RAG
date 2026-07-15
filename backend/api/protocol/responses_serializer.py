@@ -81,6 +81,8 @@ class _Assembler:
         ] = []  # store-ready dicts {type, role, content}
         self.text = ""
         self.reasoning = ""
+        self.timeline: List[Dict[str, str]] = []
+        self._timeline_tool_ids: set[str] = set()
         self.usage = None
         self.status = "completed"
         self.error: Optional[ResponseError] = None
@@ -91,11 +93,28 @@ class _Assembler:
 
     def on_text(self, text: str):
         self.text += text
+        self._append_text_step("text", text)
 
     def on_reasoning(self, text: str):
         self.reasoning += text
+        self._append_text_step("reasoning", text)
+
+    def _append_text_step(self, kind: str, text: str) -> None:
+        if not text:
+            return
+        if self.timeline and self.timeline[-1].get("kind") == kind:
+            self.timeline[-1]["text"] += text
+        else:
+            self.timeline.append({"kind": kind, "text": text})
+
+    def on_tool_started(self, call_id: str) -> None:
+        if call_id in self._timeline_tool_ids:
+            return
+        self._timeline_tool_ids.add(call_id)
+        self.timeline.append({"kind": "tool", "id": call_id})
 
     def on_tool_completed(self, call_id: str, name: str, arguments: str):
+        self.on_tool_started(call_id)
         self.output.append(
             ResponseFunctionToolCall(
                 id=f"fc_{call_id}",
@@ -194,7 +213,7 @@ class _Assembler:
                 {
                     "type": "message",
                     "role": "assistant",
-                    "content": {"text": self.text},
+                    "content": {"text": self.text, "timeline": self.timeline},
                 }
             )
         if usage is not None:
@@ -237,6 +256,8 @@ async def serialize_response_sync(
             asm.on_text(ev.text)
         elif isinstance(ev, ReasoningDelta):
             asm.on_reasoning(ev.text)
+        elif isinstance(ev, ToolStarted):
+            asm.on_tool_started(ev.call_id)
         elif isinstance(ev, ToolCompleted):
             asm.on_tool_completed(ev.call_id, ev.name, ev.arguments)
         elif isinstance(ev, ToolResult):
@@ -245,7 +266,7 @@ async def serialize_response_sync(
             usage = ev.usage
         elif isinstance(ev, RunFailed):
             asm.on_failed(ev.message)
-        # RunStarted, ToolStarted: no sync effect
+        # RunStarted has no sync effect.
     asm.finalize(usage)
     resp = asm.to_response().model_dump(mode="json")
     if asm.tool_results:
@@ -511,6 +532,7 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ToolStarted):
+            asm.on_tool_started(ev.call_id)
             if reasoning_open:
                 for chunk in close_reasoning():
                     yield chunk
@@ -533,6 +555,7 @@ async def serialize_response_stream(
                 )
             )
         elif isinstance(ev, ToolArgumentsDelta):
+            asm.on_tool_started(ev.call_id)
             if reasoning_open:
                 for chunk in close_reasoning():
                     yield chunk
