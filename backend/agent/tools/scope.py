@@ -51,6 +51,15 @@ def scope_default_kb_ids() -> List[str]:
     return []
 
 
+def scope_sandbox_template() -> str:
+    """The active agent's sandbox template key, threaded through
+    ``metadata['sandbox_template']`` by the builder. The sandbox provider is a
+    singleton built from global config, so this is how a per-agent template
+    reaches it. Only the key travels — the provider resolves it (and any
+    ``env_refs`` secrets) against its own settings."""
+    return str(get_current_tool_scope().metadata.get("sandbox_template") or "")
+
+
 def scope_knowledge_rerank() -> Dict[str, Any]:
     """Return the active Agent's validated knowledge rerank policy."""
     raw = get_current_tool_scope().metadata.get("knowledge_rerank")

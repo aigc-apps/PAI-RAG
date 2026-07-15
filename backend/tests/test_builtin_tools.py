@@ -343,7 +343,8 @@ def test_default_registry_includes_configured_agentrun_sandbox(monkeypatch):
             "name": "AgentRun",
             "settings": {
                 "provider": "agentrun",
-                "template_name": "code-template",
+                "templates": {"default": {"name": "code-template"}},
+                "default_template": "default",
                 "access_key_id_env": "AGENTRUN_ACCESS_KEY_ID",
                 "access_key_secret_env": "AGENTRUN_ACCESS_KEY_SECRET",
                 "account_id_env": "AGENTRUN_ACCOUNT_ID",
@@ -373,7 +374,8 @@ def test_default_registry_includes_configured_agentrun_rest_sandbox():
             "settings": {
                 "provider": "agentrun_rest",
                 "endpoint": "https://sandbox-gateway.example.com",
-                "template_name": "code-template",
+                "templates": {"default": {"name": "code-template"}},
+                "default_template": "default",
                 "api_key": "secret",
                 "account_id": "acct-1",
             },
@@ -395,7 +397,8 @@ def test_default_registry_includes_configured_agentrun_rest_sandbox():
 
 def test_agentrun_rest_provider_derives_endpoint_from_account_id():
     provider = AgentRunRestSandboxProvider({
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "api_key": "secret",
         "account_id": "acct-1",
         "region": "cn-hangzhou",
@@ -411,7 +414,8 @@ def test_agentrun_rest_provider_skipped_without_api_key():
             "name": "AgentRun REST",
             "settings": {
                 "provider": "agentrun_rest",
-                "template_name": "code-template",
+                "templates": {"default": {"name": "code-template"}},
+                "default_template": "default",
                 "account_id": "acct-1",
             },
             "used_by": ["sandbox"],
@@ -470,7 +474,8 @@ def test_agentrun_rest_provider_creates_per_user_scope(monkeypatch):
     monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "api_key": "secret",
         "account_id": "acct-1",
         "nas_config": {
@@ -601,7 +606,8 @@ def _rest_provider_with_recorder(monkeypatch):
     monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "api_key": "secret",
         "account_id": "acct-1",
     })
@@ -747,7 +753,8 @@ def test_agentrun_rest_provider_reuses_user_session(monkeypatch):
     monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "account_id": "acct-1",
     })
     token = set_current_tool_scope(ToolScope(user_id="u1"))
@@ -808,7 +815,8 @@ def test_agentrun_rest_provider_recreates_expired_cached_sandbox(monkeypatch):
     monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "account_id": "acct-1",
     })
     token = set_current_tool_scope(ToolScope(user_id="u1"))
@@ -874,7 +882,8 @@ def test_agentrun_rest_provider_runs_shell_command(monkeypatch):
     monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "api_key": "secret",
         "account_id": "acct-1",
     })
@@ -935,7 +944,8 @@ def test_agentrun_rest_provider_shell_command_failure_status(monkeypatch):
     monkeypatch.setattr("agent.tools.sandbox_providers.httpx.AsyncClient", _Client)
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "api_key": "secret",
         "account_id": "acct-1",
     })
@@ -990,7 +1000,8 @@ def test_agentrun_rest_provider_omits_nasconfig_and_envs_when_disabled(monkeypat
     )
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "account_id": "acct-1",
         "inject_env_contract": False,
     })
@@ -1014,7 +1025,8 @@ def test_agentrun_rest_provider_user_path_fallback_without_user_id(monkeypatch):
     )
     provider = AgentRunRestSandboxProvider({
         "endpoint": "https://gateway.test",
-        "template_name": "code-template",
+        "templates": {"default": {"name": "code-template"}},
+        "default_template": "default",
         "account_id": "acct-1",
         "nas_config": {
             "user_server_addr": "nas-cn-hangzhou.aliyuncs.com:/",

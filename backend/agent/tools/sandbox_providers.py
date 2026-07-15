@@ -9,12 +9,12 @@ import shlex
 import threading
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from loguru import logger
 
-from agent.tools.scope import get_current_tool_scope
+from agent.tools.scope import get_current_tool_scope, scope_sandbox_template
 
 
 @dataclass
@@ -41,7 +41,8 @@ class ScopedSandboxProvider:
 
     def __init__(self, settings: Dict[str, Any]):
         self.settings = settings
-        self.template_name = str(settings.get("template_name") or "")
+        self.templates = dict(settings.get("templates") or {})
+        self.default_template = str(settings.get("default_template") or "")
         self.template_type = str(settings.get("template_type") or "CodeInterpreter")
         self.idle_timeout_seconds = int(settings.get("idle_timeout_seconds") or 600)
         self.session_idle_seconds = int(
@@ -52,6 +53,19 @@ class ScopedSandboxProvider:
         self.cwd = str(settings.get("cwd") or "/home/user")
         self._sessions: Dict[str, _SandboxSession] = {}
         self._lock = threading.Lock()
+
+    def _resolve_template(self) -> Tuple[str, Dict[str, Any]]:
+        """Map the active agent's template key to its settings block. Resolution
+        happens here, per create, rather than in ``__init__``: the provider is a
+        singleton shared by every agent, while the template is per-agent."""
+        key = scope_sandbox_template() or self.default_template
+        tpl = self.templates.get(key)
+        if tpl is None:
+            raise RuntimeError(
+                f"sandbox template {key!r} is not defined; "
+                f"valid templates: {sorted(self.templates)}"
+            )
+        return key, tpl
 
     async def run_code(
         self,
@@ -199,7 +213,7 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
     Alibaba Cloud auth/signing, AgentRun sandbox creation, dynamic OSS/NAS
     mounts, and hard cleanup.
 
-    Required settings: template_name, api_key, account_id. The gateway endpoint
+    Required settings: templates, api_key, account_id. The gateway endpoint
     is optional; when omitted it is derived as
     `https://{account_id}.agentrun-data.{region}.aliyuncs.com`.
 
@@ -426,9 +440,13 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
                 "set settings.account_id or AGENTRUN_ACCOUNT_ID"
             )
         scope = get_current_tool_scope()
-        env_contract = _build_env_contract(self, scope, scope_key)
+        key, tpl = self._resolve_template()
+        env_contract = _build_env_contract(self, scope, scope_key) or {}
+        # env_refs ride the same ~/.bash_env path as the AGENT_* contract
+        # (_bootstrap_env_async) — no separate delivery mechanism.
+        env_contract.update(_template_env_refs(tpl))
         payload = _compact_dict({
-            "templateName": self.template_name,
+            "templateName": tpl["name"],
             "templateType": self.template_type or None,
             "sandboxId": _scoped_sandbox_id(self.settings, scope_key),
             "nasConfig": _build_nas_config(self, scope, scope_key),
@@ -436,21 +454,25 @@ class AgentRunRestSandboxProvider(ScopedSandboxProvider):
             # ignored by the platform and kept only for forward-compat. The env
             # contract is delivered by _bootstrap_env_async below (writes
             # ~/.bash_env + ~/.aliyun/config.json inside the started sandbox).
-            "envs": env_contract,
+            # `or None` (not just `env_contract`) so an empty merge — the AGENT_*
+            # contract disabled and no env_refs configured — omits the key
+            # entirely via _compact_dict, same as before env_refs existed.
+            "envs": env_contract or None,
         })
         try:
             body = await self._request_async("POST", self.create_path, json=payload)
         except SandboxUnavailable as exc:
             # Create returned 404/410 — almost always a config mismatch, not a
             # stale-cache situation. Surface the gateway body + the values we
-            # sent so the operator can see which of template_name / account_id
-            # / region to check (a "template not found" here usually means the
-            # template doesn't exist under this account_id in this region).
+            # sent so the operator can see which of templates[key].name /
+            # account_id / region to check (a "template not found" here usually
+            # means the template doesn't exist under this account_id in this
+            # region).
             raise RuntimeError(
-                f"sandbox create failed (template={self.template_name!r}, "
+                f"sandbox create failed (template={key!r} -> {tpl['name']!r}, "
                 f"account_id={self.parent_id!r}): {exc}. "
-                f"Verify settings.template_name and settings.account_id match a "
-                f"template registered in AgentRun under that account (and region)."
+                f"Verify the template exists in AgentRun under that account (and "
+                f"region), and that settings.templates[{key!r}].name matches it."
             ) from exc
         sandbox_id = _extract_sandbox_id(body)
         if not sandbox_id:
@@ -698,8 +720,7 @@ class AgentRunSdkSandboxProvider(ScopedSandboxProvider):
                 "install it with `pip install agentrun-sdk`"
             ) from exc
 
-        if not self.template_name:
-            raise RuntimeError("sandbox provider requires settings.template_name")
+        key, tpl = self._resolve_template()
 
         template_type = getattr(TemplateType, "CODE_INTERPRETER")
         if self.template_type in {"Browser", "AllInOne", "CustomImage"}:
@@ -707,7 +728,7 @@ class AgentRunSdkSandboxProvider(ScopedSandboxProvider):
 
         return Sandbox.create(
             template_type=template_type,
-            template_name=self.template_name,
+            template_name=tpl["name"],
             sandbox_idle_timeout_seconds=self.idle_timeout_seconds,
             sandbox_id=_scoped_sandbox_id(self.settings, scope_key),
             oss_mount_config=_model_or_none(OSSMountConfig, self.settings.get("oss_mount_config")),
@@ -1005,6 +1026,29 @@ def _build_env_contract(provider: "AgentRunRestSandboxProvider", scope, scope_ke
     return envs
 
 
+def _template_env_refs(tpl: Dict[str, Any]) -> Dict[str, str]:
+    """Resolve a template's ``env_refs`` ({VAR: SOURCE_ENV_NAME}) against the
+    service's own environment. Kept in the provider so secrets never cross the
+    builder or the tool scope — only the template key travels.
+
+    An unset source variable is skipped with a warning rather than failing the
+    create: env delivery is already best-effort (see _bootstrap_env_async), so a
+    token-less sandbox is reachable regardless, and it still serves every use
+    that isn't `git fetch`. The warning is what turns the eventual 401 into a
+    lookup instead of a mystery."""
+    resolved: Dict[str, str] = {}
+    for var, env_name in (tpl.get("env_refs") or {}).items():
+        value = os.environ.get(str(env_name))
+        if not value:
+            logger.warning(
+                "sandbox template env_ref {}={} is unset; sandbox will start without it",
+                var, env_name,
+            )
+            continue
+        resolved[str(var)] = value
+    return resolved
+
+
 # Marker block bounding our exports in ~/.bash_env so a re-bootstrap on sandbox
 # recreate replaces (rather than appends to) the previous contract.
 _BASH_ENV_BEGIN = "# >>> agent env contract >>>"
@@ -1158,14 +1202,14 @@ def make_sandbox_provider(agent_config) -> Optional[ScopedSandboxProvider]:
         # endpoint is optional and auto-derived from account_id + region when
         # not supplied.
         if not (
-            settings.get("template_name")
+            settings.get("templates")
             and _configured(settings, "api_key", "api_key_env")
             and _configured(settings, "account_id", "account_id_env")
         ):
             return None
         return AgentRunRestSandboxProvider(settings)
     if provider_name == "agentrun":
-        if not settings.get("template_name"):
+        if not settings.get("templates"):
             return None
         required = (
             ("access_key_id", "access_key_id_env"),
