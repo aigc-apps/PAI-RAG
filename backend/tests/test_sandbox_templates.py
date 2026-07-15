@@ -1,3 +1,7 @@
+import asyncio
+import base64
+import shlex
+
 import pytest
 
 from agent.tools.sandbox_providers import (
@@ -90,6 +94,114 @@ def test_unset_env_ref_is_skipped_with_a_warning(monkeypatch):
     finally:
         logger.remove(sink_id)
     assert any("GITLAB_TOKEN" in m for m in messages)
+
+
+def _bootstrap_source(command: str) -> str:
+    """Decode the base64 Python payload that `_bootstrap_env_async` sends to
+    `processes/cmd` (built by `_env_bootstrap_command`). This is the *real*
+    env delivery path -- AgentRun's CreateSandbox has no `envs` field, so the
+    contract only reaches the sandbox via this command writing ~/.bash_env.
+    The command has the shape `printf %s <base64blob> | base64 -d | python3 -`
+    with no shell-unsafe characters in the base64 alphabet, so a plain
+    whitespace split (via shlex, to stay robust to quoting) picks out the
+    blob at index 2."""
+    blob = shlex.split(command)[2]
+    return base64.b64decode(blob).decode("utf-8")
+
+
+def test_create_sandbox_async_delivers_env_ref_to_payload_and_bootstrap(monkeypatch):
+    """End-to-end regression for the env_refs security wiring.
+
+    A template's env_refs must reach BOTH the create payload's `envs` (kept
+    only for forward-compat -- AgentRun ignores it) AND the env_contract
+    handed to `_bootstrap_env_async`, which is what actually delivers the
+    token into the sandbox (via ~/.bash_env). The isolated unit tests for
+    `_resolve_template`/`_template_env_refs` cannot catch a regression where
+    a future change silently drops env_refs between resolution and either of
+    these two hand-off points -- e.g. the payload line already went through
+    `env_contract` -> `or {}` -> `... or None` once. This test drives the
+    real `_create_sandbox_async` with only the HTTP seam (`_request_async`)
+    stubbed, so both hand-offs are pinned against regression.
+    """
+    monkeypatch.setenv("GITLAB_TOKEN", "glpat-e2e-secret")
+    provider = _provider()
+    calls: list[dict] = []
+
+    async def fake_request_async(method, path, *, json=None, sensitive=False):
+        calls.append({"method": method, "path": path, "json": json})
+        if path == provider.create_path:
+            return {"data": {"sandboxId": "sb-e2e-1"}}
+        return {}
+
+    monkeypatch.setattr(provider, "_request_async", fake_request_async)
+
+    token = _with_scope("turbox")
+    try:
+        sandbox_id = asyncio.run(provider._create_sandbox_async("scope-e2e-1"))
+    finally:
+        reset_current_tool_scope(token)
+
+    assert sandbox_id == "sb-e2e-1"
+    create_calls = [c for c in calls if c["path"] == provider.create_path]
+    bootstrap_calls = [c for c in calls if c["path"].endswith("/processes/cmd")]
+    assert len(create_calls) == 1
+    assert len(bootstrap_calls) == 1
+
+    payload = create_calls[0]["json"]
+    # The resolved template's `name`, not the lookup key ("turbox").
+    assert payload["templateName"] == "sandbox-turbox-feiyue"
+    # Forward-compat only (AgentRun ignores this field), but it must still
+    # carry the resolved env_refs value.
+    assert payload["envs"]["GITLAB_TOKEN"] == "glpat-e2e-secret"
+
+    # The real delivery path: the env_contract handed to _bootstrap_env_async,
+    # which writes it into ~/.bash_env inside the freshly created sandbox.
+    bootstrap_source = _bootstrap_source(bootstrap_calls[0]["json"]["command"])
+    assert "GITLAB_TOKEN" in bootstrap_source
+    assert "glpat-e2e-secret" in bootstrap_source
+
+
+def test_create_sandbox_async_pairec_template_never_carries_gitlab_token(monkeypatch):
+    """Isolation guarantee, the flip side of the test above: a template with
+    no env_refs (pairec, the public-network template) must never carry
+    GITLAB_TOKEN in either the create payload or the env_contract delivered
+    to _bootstrap_env_async -- even though GITLAB_TOKEN IS set in the
+    environment for this test. That last part is what proves the *template*
+    gates the token rather than the token merely being absent: a
+    public-network sandbox must never carry an intranet gitlab token.
+    """
+    monkeypatch.setenv("GITLAB_TOKEN", "glpat-should-not-leak")
+    provider = _provider()
+    calls: list[dict] = []
+
+    async def fake_request_async(method, path, *, json=None, sensitive=False):
+        calls.append({"method": method, "path": path, "json": json})
+        if path == provider.create_path:
+            return {"data": {"sandboxId": "sb-e2e-2"}}
+        return {}
+
+    monkeypatch.setattr(provider, "_request_async", fake_request_async)
+
+    token = _with_scope("pairec")
+    try:
+        sandbox_id = asyncio.run(provider._create_sandbox_async("scope-e2e-2"))
+    finally:
+        reset_current_tool_scope(token)
+
+    assert sandbox_id == "sb-e2e-2"
+    create_calls = [c for c in calls if c["path"] == provider.create_path]
+    bootstrap_calls = [c for c in calls if c["path"].endswith("/processes/cmd")]
+    assert len(create_calls) == 1
+    assert len(bootstrap_calls) == 1
+
+    payload = create_calls[0]["json"]
+    assert payload["templateName"] == "sandbox-code-feiyue"
+    envs = payload.get("envs") or {}
+    assert "GITLAB_TOKEN" not in envs
+
+    bootstrap_source = _bootstrap_source(bootstrap_calls[0]["json"]["command"])
+    assert "GITLAB_TOKEN" not in bootstrap_source
+    assert "glpat-should-not-leak" not in bootstrap_source
 
 
 def _doc_with(settings: dict) -> AgentConfigDocument:
