@@ -674,7 +674,7 @@ git commit -m "feat(soul): branch code-layer guidance on template writability"
 
 **Interfaces:**
 - Consumes: `AgentProfile.sandbox.template` (Task 1); `code_writable` kwarg (Task 3); `metadata["sandbox_template"]` read by `scope_sandbox_template` (Task 2).
-- Produces: `_sandbox_template_settings(agent_config) -> Dict[str, Any]`, `_resolve_agent_template(agent_config, profile) -> Tuple[str, bool]`.
+- Produces: `_sandbox_template_settings(agent_config) -> Dict[str, Any]`, `_resolve_agent_template(agent_config, profile) -> Tuple[str, bool]`, `_apply_sandbox_template(metadata: Dict[str, Any], sandbox_template: str) -> None`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -739,6 +739,35 @@ def test_missing_provider_resolves_to_read_only():
     assert _resolve_agent_template(doc, profile) == ("", False)
 ```
 
+And the set-or-pop tests, which must call the production helper — reimplementing
+the if/else in the test body would pass whether or not `builder.py` pops, and the
+missing pop is exactly the bug these guard:
+
+```python
+from app.builder import _apply_sandbox_template
+
+
+def test_apply_sets_the_childs_own_template_over_the_parents():
+    metadata = {"sandbox_template": "pairec", "subagent_depth": 0}
+    _apply_sandbox_template(metadata, "turbox")
+    assert metadata["sandbox_template"] == "turbox"
+
+
+def test_apply_clears_an_inherited_template_when_the_child_has_none():
+    """A subagent's metadata starts as a copy of the parent's scope. Without the
+    pop, an unbound child silently runs on the parent's image."""
+    metadata = {"sandbox_template": "pairec", "subagent_depth": 0}
+    _apply_sandbox_template(metadata, "")
+    assert "sandbox_template" not in metadata
+    assert metadata["subagent_depth"] == 0  # unrelated keys survive
+
+
+def test_apply_is_a_noop_when_there_is_nothing_to_inherit_or_set():
+    metadata = {"subagent_depth": 0}
+    _apply_sandbox_template(metadata, "")
+    assert metadata == {"subagent_depth": 0}
+```
+
 - [ ] **Step 2: Run tests to verify they fail**
 
 Run: `cd backend && python -m pytest tests/test_builder_sandbox_template.py -v`
@@ -779,14 +808,25 @@ def _resolve_agent_template(agent_config, agent_profile) -> Tuple[str, bool]:
     lookup = key or str(settings.get("default_template") or "")
     tpl = templates.get(lookup) or {}
     return key, bool(tpl.get("code_writable"))
+
+
+def _apply_sandbox_template(metadata: Dict[str, Any], sandbox_template: str) -> None:
+    """Set-or-pop the scope's template key. Never inherit: a subagent's metadata
+    starts as a copy of the parent's scope, so a child with no binding of its own
+    must clear the parent's key and fall back to the provider's default rather
+    than silently running on the parent's image."""
+    if sandbox_template:
+        metadata["sandbox_template"] = sandbox_template
+    else:
+        metadata.pop("sandbox_template", None)
 ```
 
-Ensure `Tuple` and `Dict` are imported from `typing` at the top of `builder.py`.
+Ensure `Tuple`, `Dict`, and `Any` are imported from `typing` at the top of `builder.py`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd backend && python -m pytest tests/test_builder_sandbox_template.py -v`
-Expected: PASS (4 tests)
+Expected: PASS (7 tests)
 
 - [ ] **Step 5: Wire the top-level context**
 
@@ -813,8 +853,7 @@ Then, in the metadata block beside `metadata["default_kb_ids"]` (line ~247), add
 ```python
     # Per-agent sandbox template. Only the key — the provider resolves it (and any
     # env_refs secrets) against its own settings at create time.
-    if sandbox_template:
-        metadata["sandbox_template"] = sandbox_template
+    _apply_sandbox_template(metadata, sandbox_template)
 ```
 
 - [ ] **Step 6: Wire the subagent context**
@@ -834,58 +873,18 @@ In `build_subagent_context`, replace lines 310-317:
     )
 ```
 
-Then in the inherited-metadata block (line ~341, right after `metadata["subagent_depth"] = depth`), add the set-or-pop. **This must be explicit**: the block starts from `dict(parent_scope.metadata or {})`, so without a pop a turbo-x subagent under a pai-rec parent silently inherits and runs on the pai-rec image.
+Then in the inherited-metadata block (line ~341, right after `metadata["subagent_depth"] = depth`), call the same helper. **This must be explicit**: the block starts from `dict(parent_scope.metadata or {})`, so without the pop a turbo-x subagent under a pai-rec parent silently inherits and runs on the pai-rec image.
 
 ```python
-    # Set-or-pop, never inherit: the child's own binding wins, and a child with no
-    # binding falls back to the provider's default rather than the parent's template.
-    if sandbox_template:
-        metadata["sandbox_template"] = sandbox_template
-    else:
-        metadata.pop("sandbox_template", None)
+    _apply_sandbox_template(metadata, sandbox_template)
 ```
 
-- [ ] **Step 7: Write the inheritance regression test**
-
-Append to `backend/tests/test_builder_sandbox_template.py`:
-
-```python
-def test_subagent_does_not_inherit_parent_template():
-    """A turbo-x child under a pai-rec parent must resolve to turbox, and a
-    child with no binding must not inherit the parent's."""
-    doc = _doc()
-    child = next(a for a in doc.agents if a.id == "turbox-helper")
-    parent_meta = {"sandbox_template": "pairec", "subagent_depth": 0}
-
-    key, _ = _resolve_agent_template(doc, child)
-    metadata = dict(parent_meta)
-    if key:
-        metadata["sandbox_template"] = key
-    else:
-        metadata.pop("sandbox_template", None)
-    assert metadata["sandbox_template"] == "turbox"
-
-    unbound = next(a for a in doc.agents if a.id == "main")
-    key, _ = _resolve_agent_template(doc, unbound)
-    metadata = dict(parent_meta)
-    if key:
-        metadata["sandbox_template"] = key
-    else:
-        metadata.pop("sandbox_template", None)
-    assert "sandbox_template" not in metadata
-```
-
-- [ ] **Step 8: Run tests to verify they pass**
-
-Run: `cd backend && python -m pytest tests/test_builder_sandbox_template.py -v`
-Expected: PASS (5 tests)
-
-- [ ] **Step 9: Run the full backend suite**
+- [ ] **Step 7: Run the full backend suite**
 
 Run: `cd backend && python -m pytest`
 Expected: PASS
 
-- [ ] **Step 10: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add backend/app/builder.py backend/tests/test_builder_sandbox_template.py
@@ -1200,13 +1199,16 @@ Expected: `/opt/code` owner is `1000`; both `image-metadata` and `pai-wiki` pres
 
 - [ ] **Step 9: Verify no token reached any layer**
 
+The `:?` guard is load-bearing: with `GITLAB_TOKEN` unset, `grep "$GITLAB_TOKEN"` searches for the empty string, matches every line, and reports a false "token leaked".
+
 ```bash
+: "${GITLAB_TOKEN:?set it to the same token you built with, or this check is meaningless}"
 docker history --no-trunc sandbox-turbox:latest | grep -i -c "$GITLAB_TOKEN" || echo "OK: not in history"
 docker save sandbox-turbox:latest | tar -xO | strings | grep -c "$GITLAB_TOKEN" || echo "OK: not in layers"
 docker run --rm --entrypoint sh sandbox-turbox:latest -c 'cat /opt/code/pai-wiki/.git/config'
 ```
 
-Expected: both greps report `OK:` (no matches), and `.git/config`'s remote URL is a bare `http://gitlab.alibaba-inc.com/...` with no credentials.
+Expected: both greps print `0` then `OK:` (grep -c prints the count and exits 1 on no match, which is what fires the `||`), and `.git/config`'s remote URL is a bare `http://gitlab.alibaba-inc.com/...` with no credentials.
 
 - [ ] **Step 10: Commit**
 
