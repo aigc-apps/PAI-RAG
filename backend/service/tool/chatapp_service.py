@@ -53,6 +53,15 @@ class ChatappService:
         embedding_service = EmbeddingService(self.session)
         knowledgebase = await knowledgebase_service.get_knowledgebase_by_name(kb_name, tenant_id=tenant_id)
 
+        # Read desired FAQ retrieval switches from faq_config; fall back to
+        # defaults that match faq_item_service (question only).
+        desired_enable_q = True if not faq_config else bool(
+            getattr(faq_config, "enable_question_in_retrieval", True)
+        )
+        desired_enable_a = False if not faq_config else bool(
+            getattr(faq_config, "enable_answer_in_retrieval", False)
+        )
+
         if not knowledgebase:
             logger.info(f"Creating FAQ knowledgebase {kb_name} for app_id {app_id} and tenant {tenant_id}")
 
@@ -80,9 +89,11 @@ class ChatappService:
 
             chunk_config = ChunkConfig(
                 table_config=TableParserConfig(
-                header_index_max=0,
-                question_column_index=0,
-                answer_column_index=1,
+                    header_index_max=0,
+                    question_column_index=0,
+                    answer_column_index=1,
+                    enable_question_in_retrieval=desired_enable_q,
+                    enable_answer_in_retrieval=desired_enable_a,
                 ),
                 parser_type="faq",
             )
@@ -98,6 +109,55 @@ class ChatappService:
             await self.session.flush()
             await self.session.refresh(knowledgebase)
             logger.info(f"Created FAQ knowledgebase {knowledgebase.id} (name: {kb_name}) for app_id {app_id}")
+        else:
+            # KB already exists. Keep chunk_config in sync with the latest
+            # faq_config so future file uploads produce chunk_text according
+            # to the toggled switches. Only update when values actually differ.
+            try:
+                current_chunk_config = ChunkConfig.model_validate(knowledgebase.chunk_config) if knowledgebase.chunk_config else ChunkConfig(parser_type="faq")
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(f"Failed to parse existing FAQ KB chunk_config for {kb_name}: {e}")
+                current_chunk_config = ChunkConfig(parser_type="faq")
+
+            current_table = current_chunk_config.table_config or TableParserConfig()
+            current_q = bool(current_table.enable_question_in_retrieval) if current_table.enable_question_in_retrieval is not None else True
+            current_a = bool(current_table.enable_answer_in_retrieval) if current_table.enable_answer_in_retrieval is not None else False
+
+            if current_q != desired_enable_q or current_a != desired_enable_a:
+                logger.info(
+                    f"Syncing FAQ KB {kb_name} chunk_config: question={current_q}->{desired_enable_q}, "
+                    f"answer={current_a}->{desired_enable_a}"
+                )
+                new_table = TableParserConfig(
+                    concat_rows=current_table.concat_rows,
+                    row_joiner=current_table.row_joiner,
+                    header_index_max=current_table.header_index_max if current_table.header_index_max is not None else 0,
+                    format_sheet_data_to_json=current_table.format_sheet_data_to_json,
+                    sheet_column_filters=current_table.sheet_column_filters,
+                    question_column_index=current_table.question_column_index if current_table.question_column_index is not None else 0,
+                    answer_column_index=current_table.answer_column_index if current_table.answer_column_index is not None else 1,
+                    enable_question_in_retrieval=desired_enable_q,
+                    enable_answer_in_retrieval=desired_enable_a,
+                )
+                new_chunk_config = ChunkConfig(
+                    chunk_size=current_chunk_config.chunk_size,
+                    chunk_overlap=current_chunk_config.chunk_overlap,
+                    parser_type="faq",
+                    separator=current_chunk_config.separator,
+                    image_caption_model=current_chunk_config.image_caption_model,
+                    image_caption_provider_name=current_chunk_config.image_caption_provider_name,
+                    table_config=new_table,
+                )
+                update_payload = KnowledgebaseCreate(
+                    name=knowledgebase.name,
+                    description=knowledgebase.description,
+                    embedding_model=knowledgebase.embedding_model,
+                    retrieval_config=RetrievalConfig.model_validate(knowledgebase.retrieval_config) if knowledgebase.retrieval_config else None,
+                    chunk_config=new_chunk_config,
+                )
+                knowledgebase = await knowledgebase_service.update_knowledgebase(
+                    kb_id=knowledgebase.id, update_data=update_payload, tenant_id=tenant_id
+                )
 
         return knowledgebase
 

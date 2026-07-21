@@ -57,6 +57,9 @@ DEFAULT_EXCLUDED_METADATA_KEYS = [
     "image_info_list",
     "file_url",
     "ref_doc_id",
+    # Internal control flag consumed only by get_node_texts_for_embedding;
+    # keep it out of any LLM / embedding template rendering.
+    "_skip_embed_prefix",
 ]
 
 
@@ -69,6 +72,16 @@ class TableParserConfig(BaseModel):
     sheet_column_filters: Optional[List[str]] = Field(default=None, description="List of column names to filter")
     question_column_index: Optional[int] = Field(default=0, description="Index of question column")
     answer_column_index: Optional[int] = Field(default=1, description="Index of answer column")
+    # FAQ-only switches. Ignored unless parser_type == 'faq'. Defaults mirror
+    # faq_item_service so file-upload and single-record paths behave identically.
+    enable_question_in_retrieval: Optional[bool] = Field(
+        default=True,
+        description="Whether the FAQ question participates in retrieval (parser_type == 'faq' only)",
+    )
+    enable_answer_in_retrieval: Optional[bool] = Field(
+        default=False,
+        description="Whether the FAQ answer participates in retrieval (parser_type == 'faq' only)",
+    )
 
 
 
@@ -306,6 +319,8 @@ class FileParser:
                             header_index_max=table_config.header_index_max,
                             question_column_index=table_config.question_column_index,
                             answer_column_index=table_config.answer_column_index,
+                            enable_question_in_retrieval=table_config.enable_question_in_retrieval,
+                            enable_answer_in_retrieval=table_config.enable_answer_in_retrieval,
                         )
                     return ExcelReader(
                             concat_rows=table_config.concat_rows,
@@ -320,6 +335,8 @@ class FileParser:
                             header_index_max=table_config.header_index_max,
                             question_column_index=table_config.question_column_index,
                             answer_column_index=table_config.answer_column_index,
+                            enable_question_in_retrieval=table_config.enable_question_in_retrieval,
+                            enable_answer_in_retrieval=table_config.enable_answer_in_retrieval,
                         )
                     return ExcelReader(
                             concat_rows=table_config.concat_rows,

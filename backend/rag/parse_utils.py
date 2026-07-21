@@ -28,6 +28,13 @@ def sanitize_text(text: str) -> str:
 def get_node_texts_for_embedding(nodes) -> list[str]:
     texts = []
     for node in nodes:
+        # FAQ (and any node explicitly opted out) must be embedded verbatim so that
+        # a query byte-identical to the question can hit similarity 1.0. In that
+        # case skip both the file_name/title prefix and the leading blank lines.
+        if node.metadata.get('_skip_embed_prefix'):
+            texts.append((node.text or "")[:3000])
+            continue
+
         base_text = ""
         file_name = node.metadata.get('file_name', '').strip()
         title = node.metadata.get('title', '').strip() or node.metadata.get('chapter_name', '').strip()
@@ -38,7 +45,10 @@ def get_node_texts_for_embedding(nodes) -> list[str]:
                 base_text += "\n"
             base_text += f"title: {title}"
 
-        base_text += f"\n\n{node.text}"
+        if base_text:
+            base_text += f"\n\n{node.text}"
+        else:
+            base_text = node.text or ""
 
         texts.append(base_text[:3000])
     return texts

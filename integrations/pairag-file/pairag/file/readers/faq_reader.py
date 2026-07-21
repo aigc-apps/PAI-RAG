@@ -23,12 +23,22 @@ class FAQReader(BaseReader):
         header_index_max: Optional[int] = 0,
         question_column_index: Optional[int] = 0,
         answer_column_index: Optional[int] = 1,
+        enable_question_in_retrieval: Optional[bool] = True,
+        enable_answer_in_retrieval: Optional[bool] = False,
         **kwargs: Any,
     ) -> None:
         """Init params."""
         super().__init__(*args, **kwargs)
         self._question_column_index = question_column_index if question_column_index is not None else 0
         self._answer_column_index = answer_column_index if answer_column_index is not None else 1
+        # Mirror faq_item_service defaults so the file-upload path and the single-record
+        # path produce byte-identical chunk_text (question only by default).
+        self._enable_question_in_retrieval = (
+            True if enable_question_in_retrieval is None else bool(enable_question_in_retrieval)
+        )
+        self._enable_answer_in_retrieval = (
+            False if enable_answer_in_retrieval is None else bool(enable_answer_in_retrieval)
+        )
         self._header_index_max = header_index_max  # Allow None to indicate no header row
         # When header_index_max is None, pandas will use numeric column indices (0, 1, 2, ...)
         # Use list of rows from 0 to header_index_max as MultiIndex column names
@@ -96,15 +106,27 @@ class FAQReader(BaseReader):
             if not question.strip() and not answer.strip():
                 continue
             
-            
-            
-            chunk_text = f"问题: {question}\n答案: {answer}"
-            
+            # Build chunk_text mirroring faq_item_service.save_faq_to_knowledgebase:
+            # newline-joined, no "问题:/答案:" prefix, question-only by default so an
+            # incoming query byte-identical to the question can hit similarity 1.0.
+            chunk_parts: List[str] = []
+            if self._enable_question_in_retrieval:
+                chunk_parts.append(question)
+            if self._enable_answer_in_retrieval:
+                chunk_parts.append(answer)
+            if not chunk_parts:
+                # Safety net: never emit an empty node. Fall back to question.
+                chunk_parts.append(question)
+            chunk_text = "\n".join(chunk_parts)
+
             row_metadata = extra_info.copy()
             row_metadata["row_number"] = i + 1
             row_metadata["question"] = question
             row_metadata["answer"] = answer
-            
+            # Tell get_node_texts_for_embedding to embed node.text verbatim (no
+            # file_name/title prefix, no leading blank lines).
+            row_metadata["_skip_embed_prefix"] = True
+
             docs.append(Document(text=chunk_text, metadata=row_metadata))
 
         file_display_name = file_name if file_name else "file"

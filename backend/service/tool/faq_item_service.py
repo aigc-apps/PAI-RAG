@@ -122,6 +122,9 @@ class FAQItemService:
                 "question": faq_item.question,
                 "answer": faq_item.answer,
                 "token_count": estimate_tokens_in_text(chunk_text),
+                # Tell get_node_texts_for_embedding to embed chunk_text verbatim
+                # (no file_name/title prefix, no leading blank lines).
+                "_skip_embed_prefix": True,
             }
 
             # Create TextNode directly (no KbChunkEntity needed for FAQ items)
