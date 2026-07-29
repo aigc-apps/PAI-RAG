@@ -95,15 +95,20 @@ class FAQReader(BaseReader):
             
             if not question.strip() and not answer.strip():
                 continue
-            
-            
-            
-            chunk_text = f"问题: {question}\n答案: {answer}"
+
+            # Build clean embedding text: question only, or question + answer.
+            # Avoid "问题:" / "答案:" prefixes — they add noise and hurt
+            # semantic matching precision.
+            if answer.strip():
+                chunk_text = f"{question}\n{answer}"
+            else:
+                chunk_text = question
             
             row_metadata = extra_info.copy()
             row_metadata["row_number"] = i + 1
             row_metadata["question"] = question
             row_metadata["answer"] = answer
+            row_metadata["is_faq"] = True  # signal to skip file_name/title prefix in embedding
             
             docs.append(Document(text=chunk_text, metadata=row_metadata))
 

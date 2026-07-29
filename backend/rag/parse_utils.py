@@ -28,6 +28,12 @@ def sanitize_text(text: str) -> str:
 def get_node_texts_for_embedding(nodes) -> list[str]:
     texts = []
     for node in nodes:
+        # FAQ nodes need pure question/answer text for precise matching —
+        # skip file_name/title prefixes that would add irrelevant noise.
+        if node.metadata.get('is_faq'):
+            texts.append(node.text[:3000])
+            continue
+
         # The document title is already prepended to node.text by
         # process_file_async(), so we only prefix the file_name here
         # for additional source traceability.
