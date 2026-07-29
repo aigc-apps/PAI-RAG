@@ -61,7 +61,7 @@ class Section(BaseModel):
         
         return True
     
-    def to_chunk(self, doc_node: BaseNode, metadata: Dict[str, Any]) -> List[TextNode]:
+    def to_chunk(self, doc_node: BaseNode, metadata: Dict[str, Any], id_func: Callable = None) -> List[TextNode]:
         content = ""
         page_bbox = []
         for block in self.blocks:
@@ -78,8 +78,12 @@ class Section(BaseModel):
         }
         metadata["page_bbox"] = json.dumps(page_bbox)
         metadata["token_count"] = self.token_count
+        if id_func:
+            chunk_id = id_func(0, doc_node)
+        else:
+            chunk_id = uuid.uuid4().hex
         return TextNode(
-            id_=uuid.uuid4().hex,
+            id_=chunk_id,
             text=content,
             metadata=metadata,
             relationships=relationships
@@ -216,7 +220,7 @@ class PositionalMarkdownNodeParser(NodeParser):
             sections = self.split_content_list(content_list)
             for section in sections:
                 chunk_metadata = node.metadata.copy()
-                chunk = section.to_chunk(doc_node=node, metadata=chunk_metadata)
+                chunk = section.to_chunk(doc_node=node, metadata=chunk_metadata, id_func=self.id_func)
                 all_chunks.append(chunk)
 
 

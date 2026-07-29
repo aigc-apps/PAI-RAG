@@ -469,6 +469,19 @@ class DataSourceService:
         )
         return result.first()
 
+    async def get_document_row_by_source_id(
+        self, ds_id: str, source_id: str, tenant_id: str
+    ) -> Optional[DataSourceDocumentEntity]:
+        """Fetch a manifest row by its stable upstream identity."""
+        result = await self.session.exec(
+            select(DataSourceDocumentEntity).where(
+                DataSourceDocumentEntity.datasource_id == ds_id,
+                DataSourceDocumentEntity.source_id == source_id,
+                DataSourceDocumentEntity.tenant_id == tenant_id,
+            )
+        )
+        return result.first()
+
     async def get_document(
         self, ds_id: str, doc_id: str, tenant_id: str
     ) -> Optional[dict]:
@@ -626,23 +639,49 @@ class DataSourceService:
         Returns ``(datasource, run)`` on success, or ``(None, None)`` if the data
         source is already syncing (concurrent/duplicate trigger) or missing. The
         claim is a conditional UPDATE so only one of N racing tasks wins.
+
+        If the API endpoint already set status to ``syncing`` before enqueuing
+        (for immediate UI feedback), we accept that as a valid claim and proceed.
         """
         now = _utcnow()
-        # atomic compare-and-set: flip to syncing only if not already syncing
-        result = await self.session.execute(
-            update(DataSourceEntity)
-            .where(
-                DataSourceEntity.id == ds_id,
-                DataSourceEntity.tenant_id == tenant_id,
-                DataSourceEntity.status != DataSourceStatus.syncing,
+        datasource = await self.get_datasource(ds_id, tenant_id)
+        if datasource is None:
+            logger.warning(
+                f"[datasource-sync] begin_sync: datasource not found ds_id={ds_id} tenant={tenant_id}"
             )
-            .values(status=DataSourceStatus.syncing, last_sync_at=now, last_error=None, updated_at=now)
-        )
-        if result.rowcount == 0:
-            # already syncing or does not exist — do not start a second run
             return None, None
 
-        datasource = await self.get_datasource(ds_id, tenant_id)
+        # If the API already set status to syncing, accept it — the API already
+        # guarded against concurrent triggers. Otherwise, try an atomic claim.
+        if datasource.status == DataSourceStatus.syncing:
+            logger.info(
+                f"[datasource-sync] begin_sync: status already syncing (set by API) "
+                f"ds_id={ds_id} tenant={tenant_id}, proceeding"
+            )
+        else:
+            # atomic compare-and-set: flip to syncing only if not already syncing
+            result = await self.session.execute(
+                update(DataSourceEntity)
+                .where(
+                    DataSourceEntity.id == ds_id,
+                    DataSourceEntity.tenant_id == tenant_id,
+                    DataSourceEntity.status != DataSourceStatus.syncing,
+                )
+                .values(status=DataSourceStatus.syncing, last_sync_at=now, last_error=None, updated_at=now)
+            )
+            if result.rowcount == 0:
+                # already syncing or does not exist — do not start a second run
+                logger.warning(
+                    f"[datasource-sync] begin_sync: atomic claim FAILED for ds_id={ds_id} "
+                    f"tenant={tenant_id} — already syncing (race condition)"
+                )
+                return None, None
+            logger.info(
+                f"[datasource-sync] begin_sync: atomic claim SUCCESS for ds_id={ds_id} tenant={tenant_id}"
+            )
+            # Refresh after the UPDATE
+            datasource = await self.get_datasource(ds_id, tenant_id)
+
         run = DataSourceSyncRunEntity(
             tenant_id=tenant_id,
             datasource_id=ds_id,
@@ -658,18 +697,18 @@ class DataSourceService:
         return datasource, run
 
     async def get_manifest_map(self, ds_id: str, tenant_id: str) -> dict:
-        """doc_id -> DataSourceDocumentEntity for the data source (diff baseline)."""
+        """source_id -> manifest row for source-level incremental diffing."""
         results = await self.session.exec(
             select(DataSourceDocumentEntity).where(
                 DataSourceDocumentEntity.datasource_id == ds_id,
                 DataSourceDocumentEntity.tenant_id == tenant_id,
             )
         )
-        return {row.doc_id: row for row in results.all()}
+        return {row.source_id: row for row in results.all()}
 
     async def upsert_document(
         self, ds_id: str, kb_id: str, tenant_id: str, source_doc,
-        file_id: str, doc_status: str = DataSourceDocStatus.ingesting,
+        doc_id: str, doc_status: str = DataSourceDocStatus.ingesting,
         existing: Optional[DataSourceDocumentEntity] = None,
         changed: bool = True,
     ) -> DataSourceDocumentEntity:
@@ -681,11 +720,15 @@ class DataSourceService:
                 tenant_id=tenant_id,
                 datasource_id=ds_id,
                 kb_id=kb_id,
-                doc_id=source_doc.doc_id,
+                source_id=source_doc.source_id,
+                doc_id=doc_id,
+                file_id=doc_id,
                 first_seen_at=now,
             )
+        row.source_id = source_doc.source_id
+        row.doc_id = doc_id
         row.path = source_doc.path
-        row.file_id = file_id
+        row.file_id = doc_id
         row.source_url = source_doc.source_url
         row.fetch_url = source_doc.fetch_url
         row.title = source_doc.title
@@ -707,7 +750,8 @@ class DataSourceService:
         return row
 
     async def mark_document_failed(
-        self, ds_id: str, kb_id: str, tenant_id: str, doc_id: str, error: str,
+        self, ds_id: str, kb_id: str, tenant_id: str, source_id: str,
+        doc_id: str, error: str,
         existing: Optional[DataSourceDocumentEntity] = None,
         path: Optional[str] = None,
     ) -> DataSourceDocumentEntity:
@@ -717,8 +761,12 @@ class DataSourceService:
         if row is None:
             row = DataSourceDocumentEntity(
                 tenant_id=tenant_id, datasource_id=ds_id, kb_id=kb_id,
-                doc_id=doc_id, path=path or doc_id, first_seen_at=now,
+                source_id=source_id, doc_id=doc_id, file_id=doc_id,
+                path=path or source_id, first_seen_at=now,
             )
+        row.source_id = source_id
+        row.doc_id = doc_id
+        row.file_id = doc_id
         row.doc_status = DataSourceDocStatus.failed
         row.last_error = error
         row.last_fetched_at = now
@@ -730,6 +778,52 @@ class DataSourceService:
     async def delete_document_row(self, row: DataSourceDocumentEntity) -> None:
         await self.session.delete(row)
         await self.session.flush()
+
+    async def reset_manifest(self, ds_id: str, tenant_id: str) -> int:
+        """Delete ALL manifest rows for a datasource.
+
+        After this, the next sync will see every document as 'added' and
+        re-ingest from scratch. Use this to recover from a stale manifest
+        (e.g. after manual file deletions).
+
+        Returns the number of rows deleted.
+        """
+        stmt = delete(DataSourceDocumentEntity).where(
+            DataSourceDocumentEntity.datasource_id == ds_id,
+            DataSourceDocumentEntity.tenant_id == tenant_id,
+        )
+        result = await self.session.exec(stmt)
+        await self.session.flush()
+        deleted = result.rowcount
+        logger.info(
+            f"[datasource-sync] Reset manifest for ds_id={ds_id}: "
+            f"deleted {deleted} row(s)"
+        )
+        return deleted
+
+    async def delete_document_rows_by_file_id(self, kb_id: str, file_id: str, tenant_id: str) -> int:
+        """Delete all manifest rows for a given file_id.
+
+        Called when a user manually deletes a file from the KB so the sync
+        manifest stays in sync — otherwise the next sync sees the doc as
+        unchanged and skips re-ingestion.
+
+        Returns the number of rows deleted.
+        """
+        stmt = delete(DataSourceDocumentEntity).where(
+            DataSourceDocumentEntity.kb_id == kb_id,
+            DataSourceDocumentEntity.file_id == file_id,
+            DataSourceDocumentEntity.tenant_id == tenant_id,
+        )
+        result = await self.session.exec(stmt)
+        await self.session.flush()
+        deleted = result.rowcount
+        if deleted:
+            logger.info(
+                f"[datasource-sync] Deleted {deleted} manifest row(s) "
+                f"for kb_id={kb_id} file_id={file_id}"
+            )
+        return deleted
 
     async def finalize_sync(
         self, ds_id: str, tenant_id: str, run_id: str, counts: dict,
@@ -802,6 +896,12 @@ class DataSourceService:
         datasource.updated_at = now
         self.session.add(datasource)
         await self.session.flush()
+        logger.info(
+            f"[datasource-sync] finalize_sync: ds_id={ds_id} run_id={run_id} "
+            f"status={datasource.status} added={n_added} updated={n_updated} "
+            f"deleted={n_deleted} unchanged={n_unchanged} failed={n_failed} "
+            f"error={error}"
+        )
 
     async def reconcile_document_statuses(self, ds_id: str, tenant_id: str) -> int:
         """Phase B: advance ingesting docs to synced/failed based on KbFileEntity.status.

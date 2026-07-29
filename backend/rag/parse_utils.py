@@ -28,17 +28,15 @@ def sanitize_text(text: str) -> str:
 def get_node_texts_for_embedding(nodes) -> list[str]:
     texts = []
     for node in nodes:
+        # The document title is already prepended to node.text by
+        # process_file_async(), so we only prefix the file_name here
+        # for additional source traceability.
         base_text = ""
         file_name = node.metadata.get('file_name', '').strip()
-        title = node.metadata.get('title', '').strip() or node.metadata.get('chapter_name', '').strip()
         if file_name:
-            base_text += f"file_name: {file_name}"
-        if title:
-            if base_text:
-                base_text += "\n"
-            base_text += f"title: {title}"
+            base_text += f"file_name: {file_name}\n\n"
 
-        base_text += f"\n\n{node.text}"
+        base_text += node.text
 
         texts.append(base_text[:3000])
     return texts

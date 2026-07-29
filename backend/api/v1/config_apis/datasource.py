@@ -8,6 +8,7 @@
 # (history) and the aggregate sync status. The actual /sync trigger that
 # enqueues the Celery sync task is wired in PR4.
 
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -225,6 +226,7 @@ async def sync_datasource(
     ds_id: str,
     tenant_id: str = Depends(get_tenant_id),
     user_id: Optional[str] = Query(default=None),
+    session: AsyncSession = Depends(get_db_session),
     datasource_service: DataSourceService = Depends(get_datasource_service),
 ):
     datasource = await _get_owned_datasource(kb_id, ds_id, tenant_id, datasource_service)
@@ -235,14 +237,31 @@ async def sync_datasource(
             data={"datasource_id": ds_id, "status": "already_syncing"},
             message="A sync is already in progress for this data source.",
         )
+    # Set status to syncing BEFORE enqueuing the Celery task so the frontend
+    # polling sees "syncing" immediately and shows a progress bar. Without this,
+    # if the worker is down, /sync-status recomputes the aggregate from doc
+    # statuses and flips back to "succeeded" within the first poll, making the
+    # UI flash "done" before anything actually runs.
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    datasource.status = DataSourceStatus.syncing
+    datasource.last_sync_at = now
+    datasource.last_error = None
+    datasource.updated_at = now
+    session.add(datasource)
+    await session.commit()
+    await session.refresh(datasource)
     # The Celery task opens its own sync run (phase A) and ingests via the
     # existing file pipeline. Client polls /sync-status and /sync-runs.
     import app.worker as background_worker
-    background_worker.sync_datasource.delay(
+    task = background_worker.sync_datasource.delay(
         datasource_id=ds_id, tenant_id=tenant_id, trigger="manual", triggered_by=user_id,
     )
+    logger.info(
+        f"[datasource-sync] Enqueued Celery task {task.id} for datasource={ds_id} "
+        f"kb={kb_id} tenant={tenant_id} source_type={datasource.source_type}"
+    )
     return success_response(
-        data={"datasource_id": ds_id, "status": "accepted"},
+        data={"datasource_id": ds_id, "status": "accepted", "task_id": task.id},
         message="Data source sync triggered.",
     )
 
@@ -264,6 +283,37 @@ async def cancel_datasource_sync(
     return success_response(
         data={"datasource_id": ds_id, "cancelled": cancelled},
         message=f"Cancelled {cancelled} in-flight document(s).",
+    )
+
+
+@datasource_router.post("/{kb_id}/datasources/{ds_id}/reset", response_model=ResponseModel[dict])
+@handle_api_exceptions(action="reset data source sync progress")
+async def reset_datasource_sync_progress(
+    kb_id: str,
+    ds_id: str,
+    tenant_id: str = Depends(get_tenant_id),
+    session: AsyncSession = Depends(get_db_session),
+    datasource_service: DataSourceService = Depends(get_datasource_service),
+):
+    """Reset sync progress — clear the document manifest so the next sync
+    re-discovers and re-ingests ALL documents from scratch.
+
+    Use this when:
+    - Documents were manually deleted from the KB and the manifest is stale
+    - You want to force a full re-sync regardless of content changes
+    """
+    datasource = await _get_owned_datasource(kb_id, ds_id, tenant_id, datasource_service)
+    if datasource.status == DataSourceStatus.syncing:
+        return success_response(
+            data={"datasource_id": ds_id, "status": "already_syncing"},
+            message="A sync is in progress; try reset after it finishes.",
+        )
+    deleted = await datasource_service.reset_manifest(ds_id=ds_id, tenant_id=tenant_id)
+    await session.commit()
+    return success_response(
+        data={"datasource_id": ds_id, "deleted_manifest_rows": deleted},
+        message=f"Sync progress reset. {deleted} manifest row(s) cleared. "
+                f"Trigger a sync to re-ingest all documents.",
     )
 
 

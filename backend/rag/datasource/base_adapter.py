@@ -73,7 +73,7 @@ class BaseAdapter(ABC):
         title = doc.title or first_markdown_heading(normalized) or doc.path.rsplit("/", 1)[-1]
 
         return SourceDocument(
-            doc_id=self.make_doc_id(doc.path),
+            source_id=self.get_source_id(doc),
             datasource_key=self.datasource_key,
             path=doc.path,
             title=title,
@@ -93,8 +93,12 @@ class BaseAdapter(ABC):
         )
 
     # -- helpers ------------------------------------------------------------
-    def make_doc_id(self, path: str) -> str:
-        return f"{self.datasource_key}/{path.lstrip('/')}"
+    def get_source_id(self, doc: DiscoveredDoc) -> str:
+        """Return the stable upstream identity used by the sync manifest."""
+        source_id = (doc.source_id or doc.path.lstrip("/")).strip()
+        if not source_id:
+            raise ValueError(f"Document '{doc.path}' has no stable source_id.")
+        return source_id
 
     @staticmethod
     def strip_frontmatter(body: str) -> str:

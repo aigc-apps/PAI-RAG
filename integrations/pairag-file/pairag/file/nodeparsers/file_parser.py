@@ -89,7 +89,12 @@ class ReaderConfig(BaseModel):
 
 
 def node_id_func(i: int, doc: BaseNode) -> str:
-    return uuid.uuid4().hex
+    """Generate a short chunk ID: ``chunk_xxxxxxxx`` (8 hex chars).
+
+    Uses 8 random hex chars (32 bits) for ~4 billion combinations — sufficient
+    to avoid collisions in practice while keeping IDs short for model inference.
+    """
+    return f"chunk_{uuid.uuid4().hex[:8]}"
 
 
 
@@ -395,7 +400,7 @@ class FileParser:
             chunks = []
             doc_type = doc_node.metadata["file_extension"]
             if doc_type in IMAGE_DOC_TYPES:
-                node_id = uuid.uuid4().hex
+                node_id = node_id_func(0, doc_node)
                 match = re.fullmatch(MARKDOWN_IMAGE_PATTERN, doc_node.text.strip())
                 alt, image_url = match.group(1), match.group(2)
                 chunk_text = markdown_image_text_to_chunk(image_url, alt)
@@ -419,7 +424,7 @@ class FileParser:
                     chunks = parser.get_nodes_from_documents([doc_node])
                 else:
                     chunks.append(TextNode(
-                        id_=uuid.uuid4().hex,
+                        id_=node_id_func(0, doc_node),
                         text=doc_node.text,
                         metadata={
                             "token_count": token_count,

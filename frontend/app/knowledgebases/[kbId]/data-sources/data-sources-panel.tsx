@@ -26,7 +26,7 @@ import {
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import {
   Plus, RefreshCcw, Clock, FileText, MoreVertical, CheckCircle, XCircle,
-  AlertTriangle, Trash2, Pencil, Globe, BookOpen, Power,
+  AlertTriangle, Trash2, Pencil, Globe, BookOpen, BookMarked, Power, RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '@/app/providers/i18n';
@@ -111,6 +111,9 @@ export default function DataSourcesPanel({ kbId }: { kbId: string }) {
 
   const [cancelTarget, setCancelTarget] = useState<DataSource | null>(null);
   const [cancelling, setCancelling] = useState(false);
+
+  const [resetTarget, setResetTarget] = useState<DataSource | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const fetchSources = useCallback(async () => {
     try {
@@ -216,6 +219,26 @@ export default function DataSourcesPanel({ kbId }: { kbId: string }) {
     }
   };
 
+  const handleReset = async () => {
+    if (!resetTarget) return;
+    setResetting(true);
+    try {
+      const res = await tenantFetch(
+        `/api/config/knowledgebases/${kbId}/datasources/${resetTarget.id}/reset`,
+        { method: 'POST' },
+      );
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json?.message || t('datasource.resetFailed'));
+      toast.success(t('datasource.resetSuccess', { count: json?.data?.deleted_manifest_rows ?? 0 }));
+      setResetTarget(null);
+      fetchSources();
+    } catch (err: any) {
+      toast.error(err.message || t('datasource.resetFailed'));
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -289,6 +312,7 @@ export default function DataSourcesPanel({ kbId }: { kbId: string }) {
               onToggle={() => handleToggleEnabled(s)}
               onCancel={() => setCancelTarget(s)}
               onDelete={() => setDeleteTarget(s)}
+              onReset={() => setResetTarget(s)}
               onViewDocs={() => { setDocsTarget(s); setDocsOpen(true); }}
             />
           ))}
@@ -324,6 +348,19 @@ export default function DataSourcesPanel({ kbId }: { kbId: string }) {
         cancelLabel={t('datasource.keepRunning')}
         onConfirm={handleCancel}
         loading={cancelling}
+      />
+
+      <ConfirmDialog
+        open={!!resetTarget}
+        onOpenChange={(o) => !o && setResetTarget(null)}
+        variant="warning"
+        title={t('datasource.confirmReset')}
+        description={t('datasource.confirmResetDesc')}
+        target={resetTarget ? { label: t('datasource.name'), value: resetTarget.name } : undefined}
+        confirmLabel={t('datasource.reset')}
+        cancelLabel={t('common.cancel')}
+        onConfirm={handleReset}
+        loading={resetting}
       />
 
       <ConfirmDialog
@@ -403,7 +440,7 @@ function scheduleLabel(t: (k: string) => string, sched: string | null): string {
 }
 
 function SourceCard({
-  source, status, onSync, onEdit, onToggle, onCancel, onDelete, onViewDocs,
+  source, status, onSync, onEdit, onToggle, onCancel, onDelete, onReset, onViewDocs,
 }: {
   source: DataSource;
   status?: SyncStatus;
@@ -412,12 +449,13 @@ function SourceCard({
   onToggle: () => void;
   onCancel: () => void;
   onDelete: () => void;
+  onReset: () => void;
   onViewDocs: () => void;
 }) {
   const { t } = useI18n();
   const effStatus = status?.status ?? source.status;
   const isActive = ACTIVE.has(effStatus);
-  const Icon = source.source_type === 'sphinx' ? BookOpen : Globe;
+  const Icon = source.source_type === 'sphinx' ? BookOpen : source.source_type === 'yuque' ? BookMarked : Globe;
   const report = status?.last_sync_report ?? source.last_sync_report;
   const total = status?.total_documents ?? source.doc_count;
   const synced = status?.synced ?? 0;
@@ -484,6 +522,11 @@ function SourceCard({
                 {source.enabled ? t('datasource.disable') : t('datasource.enable')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={onReset}>
+                <RotateCcw className="mr-2 h-3.5 w-3.5" />
+                {t('datasource.resetSync')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onClick={onDelete}>
                 <Trash2 className="mr-2 h-3.5 w-3.5" /> {t('common.delete')}
               </DropdownMenuItem>
@@ -532,6 +575,9 @@ function SourceDialog({
   const [product, setProduct] = useState('');
   const [llmsUrl, setLlmsUrl] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
+  const [yuqueNamespace, setYuqueNamespace] = useState('');
+  const [yuqueSlug, setYuqueSlug] = useState('');
+  const [yuqueBaseUrl, setYuqueBaseUrl] = useState('');
   const [lang, setLang] = useState('');
   const [schedEnabled, setSchedEnabled] = useState(false);
   const [schedule, setSchedule] = useState('86400');
@@ -547,6 +593,9 @@ function SourceDialog({
     setProduct(editing?.source_config?.product || '');
     setLlmsUrl(editing?.source_config?.llms_url || '');
     setBaseUrl(editing?.source_config?.base_url || '');
+    setYuqueNamespace(editing?.source_config?.namespace || '');
+    setYuqueSlug(editing?.source_config?.slug || '');
+    setYuqueBaseUrl(editing?.source_config?.base_url || '');
     setLang(editing?.source_config?.lang || '');
     setSchedEnabled(!!editing?.sync_schedule);
     setSchedule(editing?.sync_schedule || '86400');
@@ -558,6 +607,13 @@ function SourceDialog({
       const cfg: Record<string, any> = {};
       if (llmsUrl.trim()) cfg.llms_url = llmsUrl.trim();
       else if (product.trim()) cfg.product = product.trim();
+      if (lang) cfg.lang = lang;
+      return cfg;
+    }
+    if (type === 'yuque') {
+      const cfg: Record<string, any> = { namespace: yuqueNamespace.trim() };
+      if (yuqueSlug.trim()) cfg.slug = yuqueSlug.trim();
+      if (yuqueBaseUrl.trim()) cfg.base_url = yuqueBaseUrl.trim();
       if (lang) cfg.lang = lang;
       return cfg;
     }
@@ -574,6 +630,9 @@ function SourceDialog({
     }
     if (type === 'sphinx' && !baseUrl.trim()) {
       return toast.error(t('datasource.baseUrlRequired'));
+    }
+    if (type === 'yuque' && !yuqueNamespace.trim()) {
+      return toast.error('请填写团队/知识库 (namespace)');
     }
     setSaving(true);
     try {
@@ -644,6 +703,7 @@ function SourceDialog({
                 <SelectContent>
                   <SelectItem value="llms_txt">{t('datasource.typeLlms')}</SelectItem>
                   <SelectItem value="sphinx">{t('datasource.typeSphinx')}</SelectItem>
+                  <SelectItem value="yuque">{t('datasource.typeYuque')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -670,6 +730,24 @@ function SourceDialog({
                 <Label className="text-xs">{t('datasource.llmsUrl')}</Label>
                 <Input className="h-8 text-sm mt-1" value={llmsUrl} onChange={(e) => setLlmsUrl(e.target.value)} placeholder="https://help.aliyun.com/zh/.../llms.txt" />
                 <p className="text-[11px] text-muted-foreground mt-1">{t('datasource.llmsHint')}</p>
+              </div>
+            </>
+          ) : type === 'yuque' ? (
+            <>
+              <div>
+                <Label className="text-xs">{t('datasource.yuqueNamespace')}</Label>
+                <Input className="h-8 text-sm mt-1" value={yuqueNamespace} onChange={(e) => setYuqueNamespace(e.target.value)} placeholder="pai/arch" />
+                <p className="text-[11px] text-muted-foreground mt-1">{t('datasource.yuqueNamespaceHint')}</p>
+              </div>
+              <div>
+                <Label className="text-xs">{t('datasource.yuqueSlug')}</Label>
+                <Input className="h-8 text-sm mt-1" value={yuqueSlug} onChange={(e) => setYuqueSlug(e.target.value)} placeholder="my-doc-slug" />
+                <p className="text-[11px] text-muted-foreground mt-1">{t('datasource.yuqueSlugHint')}</p>
+              </div>
+              <div>
+                <Label className="text-xs">{t('datasource.yuqueBaseUrl')}</Label>
+                <Input className="h-8 text-sm mt-1" value={yuqueBaseUrl} onChange={(e) => setYuqueBaseUrl(e.target.value)} placeholder="https://yuque-api.antfin-inc.com/api/v2" />
+                <p className="text-[11px] text-muted-foreground mt-1">{t('datasource.yuqueBaseUrlHint')}</p>
               </div>
             </>
           ) : (

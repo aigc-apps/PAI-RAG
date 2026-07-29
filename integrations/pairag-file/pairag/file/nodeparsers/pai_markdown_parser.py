@@ -44,7 +44,10 @@ class StructuredNodeParser(BaseModel):
         default=None,
         description="base parser",
     )
-
+    id_func: Callable[[int, BaseNode], str] = Field(
+        default=None,
+        description="Function to generate node IDs",
+    )
 
     @classmethod
     def class_name(cls) -> str:
@@ -113,10 +116,19 @@ class StructuredNodeParser(BaseModel):
         title_stack: Optional[List[TreeNode]] = None,
     ) -> TextNode:
         relationships = {NodeRelationship.SOURCE: ref_doc.as_related_node_info()}
+        # Each chunk must get its own metadata copy — sharing doc_node.extra_info
+        # across chunks causes the last chunk's title to overwrite all others.
+        chunk_metadata = dict(doc_node.extra_info)
         if title_stack:
-            doc_node.extra_info['title'] = "\n".join([h.content for h in title_stack])
+            chunk_metadata['title'] = "\n".join([h.content for h in title_stack])
+        # Use the short id_func when available (e.g. chunk_xxxxxxxx), fall back
+        # to full uuid for backward compatibility.
+        if self.id_func:
+            chunk_id = self.id_func(0, doc_node)
+        else:
+            chunk_id = uuid.uuid4().hex
         text_node = TextNode(
-            id_=uuid.uuid4().hex,
+            id_=chunk_id,
             text=chunk_content,
             embedding=doc_node.embedding,
             excluded_embed_metadata_keys=doc_node.excluded_embed_metadata_keys,
@@ -124,7 +136,7 @@ class StructuredNodeParser(BaseModel):
             metadata_separator=doc_node.metadata_separator,
             metadata_template=doc_node.metadata_template,
             text_template=doc_node.text_template,
-            metadata=doc_node.extra_info,
+            metadata=chunk_metadata,
             relationships=relationships,
         )
 
@@ -297,6 +309,7 @@ class MarkdownNodeParser(NodeParser):
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             base_parser=self.base_parser,
+            id_func=self.id_func,
         )
 
         nodes_with_progress = get_tqdm_iterable(nodes, show_progress, "Chunking nodes")

@@ -188,6 +188,24 @@ class KbFileClient:
             convert_file_if_needed(file_item)
             documents, nodes = file_parser.parse(file_item, is_attachment=is_attachment)
             await update_file_content_async(file_id=file_item.id, is_attachment=is_attachment, documents=documents, tenant_id=tenant_id)
+
+            # Prepend the document title (e.g. from Yuque) directly into each
+            # chunk's text content so it participates in embedding naturally.
+            # The MarkdownNodeParser already prepends the section heading
+            # hierarchy to the chunk text; we add the document-level title on
+            # top of that so the full context is in the chunk content itself.
+            file_meta = file_entity.file_metadata or {}
+            file_title = file_meta.get('title', '').strip()
+            if file_title:
+                for node in nodes:
+                    existing_title = node.metadata.get('title', '').strip()
+                    if existing_title and existing_title != file_title:
+                        node.metadata['title'] = f"{file_title} > {existing_title}"
+                    else:
+                        node.metadata['title'] = file_title
+                    # Prepend document title into chunk content directly
+                    node.text = f"# {file_title}\n\n{node.text}"
+
             for node in nodes:
                 # 去除\x00字符，适配postgresql
                 node.text = sanitize_text(node.text)

@@ -23,6 +23,7 @@ from db.models.knowledgebase.embedding import EmbeddingModelEntity
 from db.models.knowledgebase.chunk import KbChunkEntity, create_text_node_from_chunk
 from llama_index.core.vector_stores.types import VectorStoreQueryResult
 from service.knowledgebase.utils.metadata_utils import validate_metadata_value
+from service.knowledgebase.datasource_service import DataSourceService
 from service.factory.model_factory import create_reranker_model, create_embedding_model
 from rag.metadata_filter import EmptyFilesException, query_file_ids_with_metadata_filter
 from service.factory.vectordb_factory import create_vector_store
@@ -430,24 +431,15 @@ class RagService:
         for e in eres.all():
             entities[e.id] = e
 
-        from pairag.file.store.file_store_helper import file_store
         results: List[dict] = []
         done = False
         for fid in file_ids:
             if done:
                 break
             entity = entities.get(fid)
-            if not entity or not entity.file_path:
+            if not entity or not entity.file_content:
                 continue
-            try:
-                stream = await file_store.read_async(file_path=entity.file_path, tenant_id=tenant_id)
-                if stream is None:
-                    continue
-                raw = stream.read() if hasattr(stream, "read") else stream
-                text = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"[keyword] read failed for {entity.file_path}: {e}")
-                continue
+            text = entity.file_content
             lines = text.splitlines()
             md = entity.file_metadata or {}
             for idx, line in enumerate(lines):
@@ -480,29 +472,19 @@ class RagService:
     ) -> Optional[dict]:
         """Return a file's text (windowed) + metadata (powers fetch/查看文件).
 
-        Prefers the original markdown in the file store; falls back to reassembling
-        the stored chunks in order. Mirrors the agent `fetch` tool. When ``max_chars``
-        is set, returns only ``content[offset:offset+max_chars]`` plus truncation
-        info so callers can page through long documents.
+        Prefers DB ``file_content`` (fast, no OSS round-trip). Falls back to OSS
+        for legacy files ingested before file_content was populated, then to
+        chunk reassembly.
         """
         file_service = await self._get_file_service()
         entity = await file_service.get_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
         if not entity:
             return None
 
-        content = None
-        if entity.file_path:
-            try:
-                from pairag.file.store.file_store_helper import file_store
-                stream = await file_store.read_async(file_path=entity.file_path, tenant_id=tenant_id)
-                if stream is not None:
-                    raw = stream.read() if hasattr(stream, "read") else stream
-                    content = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else str(raw)
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"file_store read failed for {entity.file_path}: {e}")
-                content = None
-
+        content = entity.file_content or None
         degraded = None
+
+        # Fallback: reassemble from chunks (for legacy files with no file_content)
         if not content:
             chunk_service = await self._get_chunk_service()
             chunks = await chunk_service.get_chunks_by_file(kb_id=kb_id, file_id=file_id, tenant_id=tenant_id)
@@ -1482,3 +1464,16 @@ class RagService:
         file_service = await self._get_file_service()
         await file_service.delete_file(file_id=file_id, kb_id=kb_id, tenant_id=tenant_id)
         logger.info(f"Finished deleting file {file_id} from knowledgebase.")
+
+        # Also clean up the sync manifest so the next sync sees the document
+        # as missing and re-ingests it. Without this, a manually deleted file
+        # would be marked "unchanged" on the next sync and never re-fetched.
+        ds_svc = DataSourceService(self.session)
+        deleted_rows = await ds_svc.delete_document_rows_by_file_id(
+            kb_id=kb_id, file_id=file_id, tenant_id=tenant_id
+        )
+        if deleted_rows:
+            logger.info(
+                f"Cleaned up {deleted_rows} sync manifest row(s) for "
+                f"deleted file {file_id}"
+            )

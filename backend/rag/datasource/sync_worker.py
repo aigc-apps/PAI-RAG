@@ -38,9 +38,51 @@ from rag.datasource.registry import get_adapter
 
 _MAX_REPORTED_ERRORS = 50
 
+# Max bytes of source document body stored in KbFileEntity.file_content (DB).
+# Covers 99%+ of markdown docs; grep/read tools hit this DB column directly
+# instead of OSS, avoiding network I/O on every request.
+MAX_FILE_CONTENT_BYTES = 200 * 1024
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _new_doc_id() -> str:
+    """Generate the one local identifier shared by doc_id and file_id."""
+    return f"doc_{uuid.uuid4().hex[:8]}"
+
+
+def _local_doc_id(existing: Optional[DataSourceDocumentEntity]) -> str:
+    if existing is None:
+        return _new_doc_id()
+    if not existing.doc_id or existing.file_id != existing.doc_id:
+        raise ValueError(
+            f"Manifest identity mismatch for source_id={existing.source_id}: "
+            f"doc_id={existing.doc_id!r}, file_id={existing.file_id!r}"
+        )
+    return existing.doc_id
+
+
+def _diff_source_ids(discovered: dict, manifest: dict) -> Tuple[set, set, set]:
+    """Return added, existing, and deleted upstream identities."""
+    current_ids = set(discovered)
+    existing_ids = set(manifest)
+    return (
+        current_ids - existing_ids,
+        current_ids & existing_ids,
+        existing_ids - current_ids,
+    )
+
+
+def _is_unchanged(previous: dict, source_doc, is_existing: bool) -> bool:
+    """Only fully synced content at the same source path is unchanged."""
+    return bool(
+        is_existing
+        and previous.get("content_hash") == source_doc.content_hash
+        and previous.get("doc_status") == DataSourceDocStatus.synced
+        and previous.get("path") == source_doc.path
+    )
 
 
 def _chunks(seq, n):
@@ -102,7 +144,7 @@ def _fetch_bodies(adapter, docs, workers: int) -> dict:
 
 async def _ingest_document(
     session, kb_id: str, datasource_key: str, datasource_id: str, tenant_id: str,
-    source_doc, existing_file_id: Optional[str], file_writer,
+    source_doc, doc_id: str, file_writer,
 ) -> Tuple[str, int]:
     """Write a document into the KB ingestion pipeline. Returns (file_id, file_version)."""
     content_bytes = source_doc.content.encode("utf-8")
@@ -141,27 +183,48 @@ async def _ingest_document(
         # identifiers / sync bookkeeping (used by tools + incremental sync)
         "datasource_id": datasource_id,
         "datasource_key": datasource_key,
-        "source_doc_id": source_doc.doc_id,
+        "source_id": source_doc.source_id,
+        "source_doc_id": doc_id,
         "fetched_from": source_doc.fetched_from,
         "content_hash": source_doc.content_hash,
     }
     meta = {k: v for k, v in meta.items() if v is not None}
 
-    entity = None
-    if existing_file_id:
-        res = await session.exec(
+    # Look up by doc_id first (the canonical key). If the doc_id format
+    # changed (e.g. after a make_doc_id refactor), fall back to the unique
+    # business key (kb_id, message_id, file_name) to find the existing row.
+    res = await session.exec(
+        select(KbFileEntity).where(
+            KbFileEntity.id == doc_id, KbFileEntity.tenant_id == tenant_id
+        )
+    )
+    entity = res.first()
+
+    if entity is None:
+        message_id = f"ds-{datasource_id}"
+        res2 = await session.exec(
             select(KbFileEntity).where(
-                KbFileEntity.id == existing_file_id, KbFileEntity.tenant_id == tenant_id
+                KbFileEntity.kb_id == kb_id,
+                KbFileEntity.message_id == message_id,
+                KbFileEntity.file_name == file_name,
+                KbFileEntity.tenant_id == tenant_id,
             )
         )
-        entity = res.first()
+        entity = res2.first()
+        if entity is not None:
+            logger.info(
+                f"[datasource-sync] Found existing file by unique key "
+                f"(kb={kb_id}, msg={message_id}, name={file_name}), "
+                f"reusing id={entity.id} instead of new doc_id={doc_id}"
+            )
+            doc_id = entity.id  # Keep the existing id to avoid PK conflict
 
     if entity is None:
         entity = KbFileEntity(
-            id=existing_file_id or uuid.uuid4().hex,
+            id=doc_id,
             tenant_id=tenant_id,
             kb_id=kb_id,
-            message_id=f"ds-{datasource_id}",  # stable: (kb_id, message_id, file_name) unique per doc
+            message_id=f"ds-{datasource_id}",  # stable namespace for source files
             file_name=file_name,
             file_path=stored_path,
             file_extension=os.path.splitext(source_doc.path)[1].lower() or ".md",
@@ -172,8 +235,8 @@ async def _ingest_document(
             file_version=version,
             status=FileStatus.pending,
             active=True,
-            file_content="",
-            file_content_length=0,
+            file_content=source_doc.content[:MAX_FILE_CONTENT_BYTES],
+            file_content_length=min(len(source_doc.content.encode("utf-8")), MAX_FILE_CONTENT_BYTES),
         )
     else:
         entity.file_name = file_name
@@ -184,6 +247,8 @@ async def _ingest_document(
         entity.file_metadata = meta
         entity.file_version = version
         entity.status = FileStatus.pending
+        entity.file_content = source_doc.content[:MAX_FILE_CONTENT_BYTES]
+        entity.file_content_length = min(len(content_bytes), MAX_FILE_CONTENT_BYTES)
         entity.updated_at = _utcnow()
 
     session.add(entity)
@@ -210,6 +275,10 @@ async def run_sync(
     rag_service_factory = rag_service_factory or _default_rag_service
 
     # -- phase A setup (atomic claim; bail if already syncing) -------------
+    logger.info(
+        f"[datasource-sync] START datasource_id={datasource_id} tenant={tenant_id} "
+        f"trigger={trigger} triggered_by={triggered_by}"
+    )
     async with create_db_session() as session:
         svc = DataSourceService(session)
         ds, run = await svc.begin_sync(datasource_id, tenant_id, trigger, triggered_by)
@@ -226,6 +295,11 @@ async def run_sync(
             "source_config": ds.source_config,
         }
         run_id = run.id
+        logger.info(
+            f"[datasource-sync] Phase A: claimed datasource={datasource_id} "
+            f"run_id={run_id} kb_id={ds_info['kb_id']} "
+            f"source_type={ds_info['source_type']} key={ds_info['datasource_key']}"
+        )
         await session.commit()
 
     counts = {"discovered": 0, "added": 0, "updated": 0, "deleted": 0, "unchanged": 0, "failed": 0}
@@ -239,26 +313,56 @@ async def run_sync(
 
     try:
         if adapter is None:
+            logger.info(
+                f"[datasource-sync] Creating adapter for source_type={ds_info['source_type']} "
+                f"key={datasource_key} config_keys={list(ds_info['source_config'].keys()) if ds_info['source_config'] else 'None'}"
+            )
             adapter = get_adapter(ds_info["source_type"], datasource_key, ds_info["source_config"])
 
+        logger.info(
+            f"[datasource-sync] {datasource_id}: starting discovery with adapter "
+            f"type={type(adapter).__name__}"
+        )
         discovered = adapter.discover()
         counts["discovered"] = len(discovered)
-        disc_by_id = {adapter.make_doc_id(d.path): d for d in discovered}
+        logger.info(
+            f"[datasource-sync] {datasource_id}: discovery returned {len(discovered)} docs, "
+            f"discovery_partial={getattr(adapter, 'discovery_partial', False)}"
+        )
+        if discovered:
+            sample_paths = [d.path for d in discovered[:5]]
+            logger.info(
+                f"[datasource-sync] {datasource_id}: first {len(sample_paths)} paths: {sample_paths}"
+            )
+        disc_by_id = {}
+        for doc in discovered:
+            source_id = adapter.get_source_id(doc)
+            if source_id in disc_by_id:
+                raise ValueError(
+                    f"Adapter returned duplicate source_id={source_id!r} "
+                    f"for paths {disc_by_id[source_id].path!r} and {doc.path!r}."
+                )
+            disc_by_id[source_id] = doc
 
         # load manifest as plain info to avoid cross-session entity reuse
         async with create_db_session() as session:
             svc = DataSourceService(session)
             manifest = await svc.get_manifest_map(datasource_id, tenant_id)
             manifest_info = {
-                doc_id: {"content_hash": row.content_hash, "file_id": row.file_id, "doc_status": row.doc_status}
-                for doc_id, row in manifest.items()
+                source_id: {
+                    "content_hash": row.content_hash,
+                    "doc_id": row.doc_id,
+                    "file_id": row.file_id,
+                    "doc_status": row.doc_status,
+                    "path": row.path,
+                }
+                for source_id, row in manifest.items()
             }
+        logger.info(
+            f"[datasource-sync] {datasource_id}: manifest has {len(manifest_info)} existing docs"
+        )
 
-        current_ids = set(disc_by_id)
-        existing_ids = set(manifest_info)
-        added_ids = current_ids - existing_ids
-        maybe_ids = current_ids & existing_ids
-        deleted_ids = existing_ids - current_ids
+        added_ids, maybe_ids, deleted_ids = _diff_source_ids(disc_by_id, manifest_info)
 
         # (DiscoveredDoc, is_existing) — added + intersection (intersection needs fetch to diff)
         to_process: List[Tuple] = (
@@ -266,19 +370,39 @@ async def run_sync(
             + [(disc_by_id[i], True) for i in maybe_ids]
         )
         logger.info(
-            f"[datasource-sync] {datasource_id}: discovered={len(discovered)} "
-            f"added={len(added_ids)} maybe_changed={len(maybe_ids)} deleted={len(deleted_ids)}"
+            f"[datasource-sync] {datasource_id}: DIFF result — "
+            f"discovered={len(discovered)} added={len(added_ids)} "
+            f"maybe_changed={len(maybe_ids)} deleted={len(deleted_ids)}"
         )
+        if len(added_ids) == 0 and len(maybe_ids) == 0 and len(deleted_ids) == 0:
+            logger.warning(
+                f"[datasource-sync] {datasource_id}: NO CHANGES detected! "
+                f"discovered_ids_sample={list(disc_by_id.keys())[:5]} "
+                f"existing_ids_sample={list(manifest_info.keys())[:5]}"
+            )
 
         # -- phase A: fetch + ingest changed docs in batches ---------------
         was_cancelled = False
-        for batch in _chunks(to_process, batch_size):
+        logger.info(
+            f"[datasource-sync] {datasource_id}: starting fetch+ingest for {len(to_process)} docs "
+            f"(batch_size={batch_size}, fetch_workers={fetch_workers})"
+        )
+        for batch_idx, batch in enumerate(_chunks(to_process, batch_size)):
             # cooperative cancel: stop before fetching a batch
             if await _is_cancelled(datasource_id, tenant_id):
                 was_cancelled = True
                 logger.info(f"[datasource-sync] {datasource_id}: cancelled by user; stopping fetch.")
                 break
+            logger.info(
+                f"[datasource-sync] {datasource_id}: batch {batch_idx} fetching {len(batch)} docs..."
+            )
             fetched = _fetch_bodies(adapter, [d for d, _ in batch], fetch_workers)
+            fetch_ok = sum(1 for _, (body, err) in fetched.items() if err is None)
+            fetch_fail = sum(1 for _, (body, err) in fetched.items() if err is not None)
+            logger.info(
+                f"[datasource-sync] {datasource_id}: batch {batch_idx} fetch done: "
+                f"ok={fetch_ok} failed={fetch_fail}"
+            )
             # Re-check after the (blocking) fetch: if cancelled meanwhile, drop this
             # batch entirely — do NOT ingest/commit/enqueue it.
             if await _is_cancelled(datasource_id, tenant_id):
@@ -291,59 +415,79 @@ async def run_sync(
             to_enqueue: List[Tuple[str, int]] = []
             async with create_db_session() as session:
                 svc = DataSourceService(session)
+                batch_ingested = 0
+                batch_skipped = 0
+                batch_ingest_failed = 0
                 for d, is_existing in batch:
-                    doc_id = adapter.make_doc_id(d.path)
+                    source_id = adapter.get_source_id(d)
                     body, err = fetched.get(d.path, (None, RuntimeError("no fetch result")))
                     existing_row = (
-                        await svc.get_document_row(datasource_id, doc_id, tenant_id)
+                        await svc.get_document_row_by_source_id(datasource_id, source_id, tenant_id)
                         if is_existing else None
                     )
+                    doc_id = _local_doc_id(existing_row)
                     if err is not None:
+                        logger.warning(
+                            f"[datasource-sync] {datasource_id}: fetch failed for doc_id={doc_id} "
+                            f"path={d.path}: {err}"
+                        )
                         await svc.mark_document_failed(
-                            datasource_id, kb_id, tenant_id, doc_id, str(err),
+                            datasource_id, kb_id, tenant_id, source_id, doc_id, str(err),
                             existing=existing_row, path=d.path,
                         )
                         counts["failed"] += 1
+                        batch_ingest_failed += 1
                         _record_error(doc_id, str(err))
                         continue
 
                     source_doc = adapter.emit(d, body)
-                    prev = manifest_info.get(doc_id, {})
+                    prev = manifest_info.get(source_id, {})
                     # Skip only when content is unchanged AND the doc is already
                     # fully synced — cancelled/failed/incomplete docs are re-ingested
                     # even if their content hash is identical.
-                    if (
-                        is_existing
-                        and prev.get("content_hash") == source_doc.content_hash
-                        and prev.get("doc_status") == DataSourceDocStatus.synced
-                    ):
+                    if _is_unchanged(prev, source_doc, is_existing):
                         counts["unchanged"] += 1
+                        batch_skipped += 1
                         continue
                     try:
-                        existing_file_id = existing_row.file_id if existing_row else None
-                        file_id, version = await _ingest_document(
-                            session, kb_id, datasource_key, datasource_id, tenant_id,
-                            source_doc, existing_file_id, file_writer,
-                        )
-                        await svc.upsert_document(
-                            datasource_id, kb_id, tenant_id, source_doc,
-                            file_id=file_id, doc_status=DataSourceDocStatus.ingesting,
-                            existing=existing_row,
-                        )
+                        # Isolate each document so a failed flush rolls back to a
+                        # savepoint before we record its failure in this session.
+                        async with session.begin_nested():
+                            file_id, version = await _ingest_document(
+                                session, kb_id, datasource_key, datasource_id, tenant_id,
+                                source_doc, doc_id, file_writer,
+                            )
+                            await svc.upsert_document(
+                                datasource_id, kb_id, tenant_id, source_doc,
+                                doc_id=doc_id, doc_status=DataSourceDocStatus.ingesting,
+                                existing=existing_row,
+                            )
                         to_enqueue.append((file_id, version))
+                        batch_ingested += 1
                         if is_existing:
                             counts["updated"] += 1
                         else:
                             counts["added"] += 1
+                        logger.debug(
+                            f"[datasource-sync] {datasource_id}: ingested doc_id={doc_id} "
+                            f"file_id={file_id} version={version} "
+                            f"({'updated' if is_existing else 'new'})"
+                        )
                     except Exception as ie:  # noqa: BLE001
                         logger.warning(f"[datasource-sync] ingest failed for {doc_id}: {ie}")
                         await svc.mark_document_failed(
-                            datasource_id, kb_id, tenant_id, doc_id, str(ie),
+                            datasource_id, kb_id, tenant_id, source_id, doc_id, str(ie),
                             existing=existing_row, path=d.path,
                         )
                         counts["failed"] += 1
+                        batch_ingest_failed += 1
                         _record_error(doc_id, str(ie))
                 await session.commit()
+                logger.info(
+                    f"[datasource-sync] {datasource_id}: batch {batch_idx} committed — "
+                    f"ingested={batch_ingested} skipped={batch_skipped} failed={batch_ingest_failed} "
+                    f"to_enqueue={len(to_enqueue)}"
+                )
 
             # Final cancel check before enqueue: if cancelled in the tiny window
             # after commit, don't enqueue. Sweep the just-committed pending files to
@@ -357,10 +501,20 @@ async def run_sync(
                 break
 
             # Files + manifest rows are committed now — safe to enqueue parsing.
+            logger.info(
+                f"[datasource-sync] {datasource_id}: batch {batch_idx} enqueuing "
+                f"{len(to_enqueue)} file tasks for parsing..."
+            )
             for file_id, version in to_enqueue:
                 enqueue_fn(file_id, version, tenant_id)
+            logger.info(
+                f"[datasource-sync] {datasource_id}: batch {batch_idx} enqueued successfully"
+            )
 
         # -- deletions -----------------------------------------------------
+        logger.info(
+            f"[datasource-sync] {datasource_id}: processing {len(deleted_ids)} deletions..."
+        )
         # Never delete when discovery was incomplete (e.g. a sphinx crawl page
         # failed transiently) — a missing page would otherwise look like a
         # source-side removal and wrongly purge live KB content.
@@ -376,10 +530,11 @@ async def run_sync(
             async with create_db_session() as session:
                 svc = DataSourceService(session)
                 rag = await rag_service_factory(session)
-                for doc_id in deleted_ids:
-                    row = await svc.get_document_row(datasource_id, doc_id, tenant_id)
+                for source_id in deleted_ids:
+                    row = await svc.get_document_row_by_source_id(datasource_id, source_id, tenant_id)
                     if row is None:
                         continue
+                    doc_id = row.doc_id
                     delete_err = None
                     if row.file_id:
                         try:
@@ -396,7 +551,7 @@ async def run_sync(
                         # sync; never orphan vectors/chunks that are still searchable.
                         logger.warning(f"[datasource-sync] delete_file failed for {doc_id}: {delete_err}")
                         await svc.mark_document_failed(
-                            datasource_id, kb_id, tenant_id, doc_id,
+                            datasource_id, kb_id, tenant_id, source_id, doc_id,
                             f"delete failed: {delete_err}", existing=row, path=row.path,
                         )
                         counts["failed"] += 1
@@ -404,6 +559,12 @@ async def run_sync(
                 await session.commit()
 
         # -- finalize ------------------------------------------------------
+        logger.info(
+            f"[datasource-sync] {datasource_id}: FINALIZING — "
+            f"added={counts['added']} updated={counts['updated']} "
+            f"deleted={counts['deleted']} unchanged={counts['unchanged']} "
+            f"failed={counts['failed']} cancelled={was_cancelled}"
+        )
         report["summary"] = (
             f"+{counts['added']} new / ~{counts['updated']} updated / "
             f"-{counts['deleted']} deleted / ={counts['unchanged']} unchanged / "
@@ -422,7 +583,9 @@ async def run_sync(
         return counts
 
     except Exception as ex:  # noqa: BLE001
-        logger.exception(f"[datasource-sync] {datasource_id} failed: {ex}")
+        logger.exception(
+            f"[datasource-sync] {datasource_id} FAILED with exception: {ex}"
+        )
         report["error"] = str(ex)
         try:
             async with create_db_session() as session:
