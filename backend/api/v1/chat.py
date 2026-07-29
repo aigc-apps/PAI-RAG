@@ -1,6 +1,12 @@
-from agent.state import AgentState
-from common.llm.models import ChatResponseGenerator
-from common.llm.utils import convert_gen_to_stream_chat_completions, convert_gen_to_chat_completions, error_chunk_gen
+from typing import AsyncIterator
+from agent.message import from_thread, keep_last_rounds
+from agent.context import AgentContext, RunVars
+from common.chat.constants import DEFAULT_AGENT_HISTORY_ROUNDS
+from api.protocol.chat_serializer import (
+    serialize_chat_stream_with_effects,
+    serialize_chat_sync_with_effects,
+)
+from agent.core.events import AgentEvent, TextDelta, RunCompleted
 from fastapi import APIRouter, Response
 from sse_starlette import EventSourceResponse
 
@@ -22,6 +28,18 @@ from loguru import logger
 chat_agent_router = APIRouter()
 
 
+async def message_event_gen(message: str):
+    """Yield a single visible assistant message as an AgentEvent stream.
+
+    Used for early-return greetings, input-guardrail rejections and error paths
+    that previously relied on error_chunk_gen / ErrorChunk. The message is emitted
+    as a TextDelta (so it is visible to the client and saved to history) followed
+    by a RunCompleted terminal event.
+    """
+    yield TextDelta(text=message)
+    yield RunCompleted()
+
+
 def extract_user_message(raw_msg: ChatCompletionMessageParam) -> str:
     content = raw_msg.get("content", "")
     logger.info(f"Extracted {content} from {raw_msg}.")
@@ -35,7 +53,7 @@ def extract_user_message(raw_msg: ChatCompletionMessageParam) -> str:
 
 
 async def generate_reponse(
-    chunk_gen: ChatResponseGenerator,
+    chunk_gen: AsyncIterator[AgentEvent],
     model: str,
     stream: bool,
     enable_output_check: bool = False,
@@ -47,30 +65,34 @@ async def generate_reponse(
     user_message: ChatCompletionMessageParam = None,
 ):
     if stream:
+        # serialize_chat_stream_with_effects yields bare chat.completion.chunk JSON
+        # strings; EventSourceResponse frames each as `data: {json}\n\n`, reproducing
+        # the exact wire format the previous serializer produced via this same wrapper.
         return EventSourceResponse(
-            convert_gen_to_stream_chat_completions(
+            serialize_chat_stream_with_effects(
+                chunk_gen,
                 model=model,
-                response_generator=chunk_gen,
-                enable_output_check=enable_output_check,
-                guardrail_hint=guardrail_hint,
-                checker=checker,
                 session=session,
                 user_id=user_id,
                 session_id=session_id,
                 user_message=user_message,
+                enable_output_check=enable_output_check,
+                checker=checker,
+                guardrail_hint=guardrail_hint,
             ),
             media_type="text/event-stream",
         )
     else:
-        return await convert_gen_to_chat_completions(
+        return await serialize_chat_sync_with_effects(
+            chunk_gen,
             model=model,
-            response_generator=chunk_gen,
-            enable_output_check=enable_output_check,
-            guardrail_hint=guardrail_hint,
-            checker=checker,
+            session=session,
             user_id=user_id,
             session_id=session_id,
             user_message=user_message,
+            enable_output_check=enable_output_check,
+            checker=checker,
+            guardrail_hint=guardrail_hint,
         )
 
 
@@ -86,7 +108,7 @@ async def chat(
     logger.info(f"Chat agent body: {chat_request}.")
     if not chat_request.messages:
         return await generate_reponse(
-            chunk_gen=error_chunk_gen(message="Hi, how can I help you."),
+            chunk_gen=message_event_gen(message="Hi, how can I help you."),
             model=chat_request.model,
             stream=chat_request.stream,
         )
@@ -120,8 +142,19 @@ async def chat(
         if guardrail_config:
             checker = create_guardrail_checker(guardrail_config)
 
-        agent_state = AgentState.from_messages(messages=chat_request.messages)
-        async with agent_service.create_agent(chat_request, tenant_id=tenant_id) as agent:
+        msgs = from_thread(chat_request.messages)
+        if not msgs:
+            return await generate_reponse(
+                chunk_gen=message_event_gen(message="Hi, how can I help you."),
+                model=chat_request.model,
+                stream=chat_request.stream,
+            )
+        current_turn = msgs[-1]
+        history = keep_last_rounds(msgs[:-1], DEFAULT_AGENT_HISTORY_ROUNDS)
+        # The clean, normalized user message used for both the guardrail-rejection
+        # early-return save and the normal save. It is not mutated downstream.
+        current_user_message = current_turn.to_wire()
+        async with agent_service.create_agent(chat_request, tenant_id=tenant_id) as bundle:
             # 输入护栏检测
             if chat_request.enable_input_guardrail:
                 logger.info("Trying to check input.")
@@ -131,7 +164,7 @@ async def chat(
                 check_result = await checker.acheck_input(text=user_message)
                 if check_result.reject:
                     return await generate_reponse(
-                        chunk_gen=error_chunk_gen(message=check_result.advice or chat_request.guardrail_hint),
+                        chunk_gen=message_event_gen(message=check_result.advice or chat_request.guardrail_hint),
                         model=chat_request.model,
                         stream=chat_request.stream,
                         session=session,
@@ -140,9 +173,16 @@ async def chat(
                         user_message=current_user_message,
                     )
 
-            async_response_gen = await agent.run_async(
-                state=agent_state
+            ctx = AgentContext(
+                system_prompt=bundle.system_prompt,
+                history=history,
+                current_turn=current_turn,
+                attachments=bundle.attachments,
+                hints=bundle.hints,
+                tools=bundle.tools,
+                run_vars=RunVars(),
             )
+            async_response_gen = await bundle.agent.run(ctx)
             response = await generate_reponse(
                 chunk_gen=async_response_gen,
                 model=chat_request.model,
@@ -160,7 +200,7 @@ async def chat(
     except ValueError as ve:
         logger.exception(f"Chat failed: {traceback.format_exc()}")
         return await generate_reponse(
-            chunk_gen=error_chunk_gen(message=f"Request failed: {ve}"),
+            chunk_gen=message_event_gen(message=f"Request failed: {ve}"),
             model=chat_request.model,
             stream=chat_request.stream,
             session=session,
@@ -171,7 +211,7 @@ async def chat(
     except Exception as ex:
         logger.exception(f"Error in /v1/chat: {traceback.format_exc()}")
         return await generate_reponse(
-            chunk_gen=error_chunk_gen(message=f"Unknown error: {ex}"),
+            chunk_gen=message_event_gen(message=f"Unknown error: {ex}"),
             model=chat_request.model,
             stream=chat_request.stream,
             session=session,

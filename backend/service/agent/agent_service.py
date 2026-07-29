@@ -10,45 +10,30 @@ from tools.knowledgebase.faq_tool import aget_faq_tool
 from service.factory.tools import create_search_tools, create_chatdb_tools, create_codesandbox_tools
 from service.factory.mcp_factory import create_mcp_tools_async
 from tools.attachments.file_chunk_searcher import aget_file_chunk_searcher
-from tools.attachments.file_reader import aget_file_reader
 from tools.attachments.multimodal_parser import aget_multimodal_parser_tool
 import os
 import traceback
+from dataclasses import dataclass
 from tools.code.code_sandbox_tool import DEFAULT_CODE_SANDBOX_DIR_PATH
 from llama_index.core.tools.function_tool import FunctionTool
 from sqlmodel.ext.asyncio.session import AsyncSession
-from agent.react_agent import ReactAgent
+from agent.agent import Agent
+from agent.context import Attachment
+from agent.tools import ToolBox, tool_from_function_tool
 from agent.prompts import REACT_PROMPT
 from loguru import logger
 from typing import List, Callable, Awaitable, Dict, Optional, AsyncIterator
 from common.chat.models import MetadataFilteringCondition
 from contextlib import asynccontextmanager
 
-def append_text(user_message: Dict, text: str):
-    """Append text to a user message, regardless of whether the content is
-    stored as a string or as a list of content parts (OpenAI content-array
-    format). If the list form has no text block yet — which happens when
-    the user sends *only* attachments with no typed text — we add a fresh
-    text block instead of silently dropping the append.
-    """
-    assert "content" in user_message, "Message必须包含content字段"
-    content = user_message["content"]
 
-    if content is None:
-        user_message["content"] = text
-        return
-    if isinstance(content, str):
-        user_message["content"] = content + text
-        return
-    if isinstance(content, list):
-        for block in content:
-            if isinstance(block, dict) and block.get("type") == "text":
-                block["text"] = (block.get("text") or "") + text
-                return
-        # No text block — append one so the hint isn't dropped.
-        content.append({"type": "text", "text": text})
-        return
-
+@dataclass
+class AgentBundle:
+    agent: Agent
+    system_prompt: str
+    tools: ToolBox
+    attachments: List[Attachment]
+    hints: List[str]
 
 def _user_message_has_text(user_message: Dict) -> bool:
     """True iff the user actually typed something (not just attached files)."""
@@ -92,7 +77,7 @@ class AgentService:
         self._get_file_resource_service = file_resource_service_getter
 
     @asynccontextmanager
-    async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> AsyncIterator[ReactAgent]:
+    async def create_agent(self, chat_request: ChatAgentRequest, tenant_id: str) -> AsyncIterator["AgentBundle"]:
         sandbox_cleanup = None
         try:
             llm_service = await self._get_llm_service()
@@ -136,7 +121,7 @@ class AgentService:
                 if chatapp.prompts:
                     system_prompt = chatapp.prompts.get("react", REACT_PROMPT)
 
-            tools, sandbox_cleanup = await self.aget_tools(
+            tools, sandbox_cleanup, attachments, hints = await self.aget_tools(
                 messages=chat_request.messages,
                 enable_search=chat_request.enable_search,
                 enable_chatdb=chat_request.enable_chatdb,
@@ -157,13 +142,15 @@ class AgentService:
                 tools_str=tools_str,
                 context_str="",  # backward-compat: old custom prompts may still have {context_str}
             )
-            agent = ReactAgent(
-                llm=llm,
+            bundle = AgentBundle(
+                agent=Agent(llm),
                 system_prompt=system_prompt,
-                tools=tools,
+                tools=ToolBox([tool_from_function_tool(t) for t in tools]),
+                attachments=attachments,
+                hints=hints,
             )
 
-            yield agent
+            yield bundle
         except Exception as ex:
             logger.exception(f"Error in build_agent: {traceback.format_exc()}")
             raise ex
@@ -189,7 +176,7 @@ class AgentService:
         chatapp_id: Optional[str] = None,
         faq_config: Optional[dict] = None,
         vision_model_id: Optional[str] = None,
-    ) -> tuple[List[FunctionTool], Callable | None]:
+    ) -> tuple[List[FunctionTool], Callable | None, List[Attachment], List[str]]:
         tools = []
 
         rag_service = await self._get_rag_service()
@@ -253,14 +240,14 @@ class AgentService:
             tools.extend(chatdb_tools)
             logger.info(f"Loaded {len(chatdb_tools)} chat_db tools.")
 
-        attachment_tools, cleanup_code_sandbox = await self.parse_attachment_tools(
+        attachment_tools, cleanup_code_sandbox, attachments, hints = await self.parse_attachment_tools(
             messages=messages,
             tenant_id=tenant_id,
             vision_model_id=vision_model_id,
         )
         tools.extend(attachment_tools)
         logger.info(f"Loaded {len(attachment_tools)} attachment tools.")
-        return tools, cleanup_code_sandbox
+        return tools, cleanup_code_sandbox, attachments, hints
 
 
     async def parse_attachment_tools(
@@ -268,17 +255,32 @@ class AgentService:
         messages: List[dict],
         tenant_id: str,
         vision_model_id: Optional[str] = None,
-    ) -> tuple[List[FunctionTool], Callable | None]:
+    ) -> tuple[List[FunctionTool], Callable | None, List[Attachment], List[str]]:
+        """Resolve attachment tools and the data to inject into the live turn.
+
+        Returns ``(attachment_tools, cleanup_code_sandbox, attachments, hints)``:
+
+        - ``attachments`` — :class:`Attachment` blocks (extracted file text or a
+          status note) the caller injects inline into the current user turn.
+        - ``hints`` — guidance strings the caller appends to the current turn.
+
+        This NO LONGER mutates the incoming user message; the message is
+        normalized and rendered by the agent layer.
+        """
         file_service = await self._get_file_resource_service()
         llm_service = await self._get_llm_service()
 
-        attachment_tools = []
+        attachment_tools: List[FunctionTool] = []
+        attachments: List[Attachment] = []
+        hints: List[str] = []
         if not messages:
-            return [], None
+            return [], None, attachments, hints
 
         user_message = messages[-1]
         if user_message.get("role") != "user":
-            return [], None
+            return [], None, attachments, hints
+
+        has_text = _user_message_has_text(user_message)
 
         user_attachments = user_message.get("attachments", [])
         image_ids = []
@@ -326,65 +328,69 @@ class AgentService:
                 media_summary.append(f"{len(video_ids)} 个视频")
 
             # Two cases:
-            # - User typed something: short inline hint, let their query drive
+            # - User typed something: short hint, let their query drive
             #   the agent as usual.
             # - User sent only media with no text: the chat LLM otherwise
             #   sees an empty prompt and has no reason to call any tool. Give
             #   it a direct instruction — understand the media first, then
             #   decide on further tools (search / KB / etc.) as needed.
-            has_text = _user_message_has_text(user_message)
             if has_text:
-                append_text(
-                    user_message,
-                    f"\n\n[已附件：{' + '.join(media_summary)}；"
-                    f"如需分析其内容，请调用 `multimodal-parser` 工具。]",
+                hints.append(
+                    f"[已附件：{' + '.join(media_summary)}；"
+                    f"如需分析其内容，请调用 `multimodal-parser` 工具。]"
                 )
             else:
-                append_text(
-                    user_message,
+                hints.append(
                     f"用户上传了 {' + '.join(media_summary)}但没有文字提问。"
                     f"请先调用 `multimodal-parser` 工具理解附件内容，"
                     f"识别用户的真实意图；如果附件信息已足够回答，请直接给出回答；"
-                    f"如果需要额外信息，再调用搜索 / 知识库等其他工具。",
+                    f"如果需要额外信息，再调用搜索 / 知识库等其他工具。"
                 )
 
         if file_ids_to_read:
-            # Register `read-file` for every text attachment regardless of
-            # current extraction state. The tool itself does a fresh DB
-            # lookup per invocation (and briefly polls if extraction is
-            # still in flight), so it handles the upload→send race where
-            # the worker is still parsing when parse_attachment_tools runs.
+            # Inline the extracted text of each text attachment as an
+            # Attachment block. We resolve the display name from the file
+            # entity and the body from the extracted text content.
             read_files = await file_service.get_files(
                 file_ids=file_ids_to_read, tenant_id=tenant_id,
             )
-            read_file_names = [f.file_name for f in read_files if f.file_name]
-            if read_file_names:
-                attachment_tools.append(
-                    await aget_file_reader(
-                        file_ids=file_ids_to_read, tenant_id=tenant_id,
-                    )
+            name_by_id = {f.id: f.file_name for f in read_files if f.file_name}
+            read_file_names = [name_by_id[fid] for fid in file_ids_to_read if fid in name_by_id]
+
+            for fid in file_ids_to_read:
+                name = name_by_id.get(fid)
+                if not name:
+                    continue
+                text_row = await file_service.get_text_content(
+                    file_id=fid, tenant_id=tenant_id
                 )
-                if _user_message_has_text(user_message):
-                    append_text(
-                        user_message,
-                        f"\n\n 可以阅读的文件列表: \n\n {read_file_names}",
+                if not text_row or not text_row.content:
+                    # Extraction not done yet (upload→send race): tell the
+                    # model the content is pending rather than dropping it.
+                    attachments.append(
+                        Attachment(
+                            name=name,
+                            body="（该文件仍在解析中，请稍后重新发送以查看其内容）",
+                        )
                     )
-                else:
-                    # User sent files with no typed question — prompt the
-                    # agent to read + summarise + ask-for-clarification.
-                    append_text(
-                        user_message,
-                        f"用户上传了以下文件但没有文字提问：{read_file_names}。"
-                        f"请使用 `read-file` 工具读取文件内容，理解用户可能的意图，"
-                        f"并给出摘要或基于内容的有用回答；若需要额外信息再调用其他工具。",
+                    continue
+                body = text_row.content
+                limit = type(file_service).LLM_INLINE_TEXT_LIMIT
+                total = text_row.content_length or len(body)
+                inline = body[:limit]
+                if total > limit:
+                    inline += (
+                        f"\n\n[内容较长，仅展示前 {len(inline)}/{total} 字；"
+                        f"如需更多内容请调用 `search-file-chunks` 工具按关键字检索。]"
                     )
+                attachments.append(Attachment(name=name, body=inline))
 
             # Only register search-file-chunks for files that already have
-            # chunks — small files don't need a search tool, and the LLM
-            # should just use read-file for them. Files still pending
-            # chunking get picked up on the next chat turn; this is
-            # acceptable because chunking only matters when the file is
-            # large enough that inline reading would be truncated.
+            # chunks — small files don't need a search tool, and the inlined
+            # text is enough for them. Files still pending chunking get
+            # picked up on the next chat turn; this is acceptable because
+            # chunking only matters when the file is large enough that
+            # inline reading would be truncated.
             large_files: List[dict] = []
             for fid in file_ids_to_read:
                 chunk_count = await file_service.count_chunks(
@@ -408,10 +414,18 @@ class AgentService:
                     )
                 )
                 catalog_names = ", ".join(f["file_name"] for f in large_files)
-                append_text(
-                    user_message,
-                    f"\n\n 对于较长的文件 [{catalog_names}] 可以调用 `search-file-chunks` "
-                    f"工具按关键字检索。",
+                hints.append(
+                    f"对于较长的文件 [{catalog_names}] 可以调用 `search-file-chunks` "
+                    f"工具按关键字检索更多内容。"
+                )
+
+            if not has_text and read_file_names:
+                # User sent files with no typed question — prompt the agent
+                # to read the attached content, infer intent, and summarise.
+                hints.append(
+                    f"用户上传了以下文件但没有文字提问：{read_file_names}。"
+                    f"请阅读上面附带的文件内容，理解用户可能的意图，"
+                    f"并给出摘要或基于内容的有用回答；若需要额外信息再调用其他工具。"
                 )
 
         # coding tool
@@ -419,9 +433,9 @@ class AgentService:
         attachment_ids_in_message = []
         for message in messages:
             if message.get("role") == "user":
-                user_attachments = message.get("attachments", [])
-                if len(user_attachments) > 0:
-                    for attachment in user_attachments:
+                msg_attachments = message.get("attachments", [])
+                if len(msg_attachments) > 0:
+                    for attachment in msg_attachments:
                         attachment_file_entity = await file_service.get_file(file_id=attachment.get("id"), tenant_id=tenant_id)
                         if not attachment_file_entity:
                             logger.warning("Attachment file_id %s not found, skipping.", attachment.get("id"))
@@ -451,12 +465,12 @@ class AgentService:
                 logger.info(f"Loaded {len(codesandbox_tools)} codesandbox tools.")
                 attachment_tools.extend(codesandbox_tools)
 
-            attachment_names_in_message = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names_in_message]
-            attachment_names_in_message = ','.join(attachment_names_in_message)
-            reply_text = f"\n\n 可以参考以下文件的本地路径回答：\n\n {attachment_names_in_message}"
-            append_text(user_message, reply_text)
+            local_paths = [os.path.join(DEFAULT_CODE_SANDBOX_DIR_PATH, attachment_name) for attachment_name in attachment_names_in_message]
+            hints.append(
+                f"可以参考以下文件的本地路径回答：\n\n {','.join(local_paths)}"
+            )
 
-        return attachment_tools, cleanup_code_sandbox
+        return attachment_tools, cleanup_code_sandbox, attachments, hints
 
 
 def _build_tools_summary(tools: List[FunctionTool]) -> str:
@@ -468,8 +482,13 @@ def _build_tools_summary(tools: List[FunctionTool]) -> str:
         )
     lines = [f"You have {len(tools)} tool(s). For every user query, pick the most relevant tool(s) to call:\n"]
     for tool in tools:
-        name = tool.metadata.name
-        desc = tool.metadata.description or ""
+        # Support both clean Tool (name/description) and legacy FunctionTool (metadata.*)
+        if hasattr(tool, "metadata"):
+            name = tool.metadata.name
+            desc = tool.metadata.description or ""
+        else:
+            name = tool.name
+            desc = tool.description or ""
         first_line = desc.strip().split("\n")[0]
         lines.append(f"- **{name}**: {first_line}")
     lines.append("\nRemember: call at least one tool for any factual question.")
